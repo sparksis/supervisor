@@ -43,7 +43,12 @@ DOCKER_NETWORK_HOST: Final = "host"
 
 @attr.s(frozen=True)
 class CommandReturn:
-    """Return object from command run."""
+    """Return object from command run.
+
+    Attributes:
+        exit_code (int): The exit code of the command.
+        output (bytes): The output of the command.
+    """
 
     exit_code: int = attr.ib()
     output: bytes = attr.ib()
@@ -51,7 +56,14 @@ class CommandReturn:
 
 @attr.s(frozen=True)
 class DockerInfo:
-    """Return docker information."""
+    """Return docker information.
+
+    Attributes:
+        version (AwesomeVersion): The version of Docker.
+        storage (str): The storage driver used by Docker.
+        logging (str): The logging driver used by Docker.
+        cgroup (str): The cgroup version used by Docker.
+    """
 
     version: AwesomeVersion = attr.ib()
     storage: str = attr.ib()
@@ -60,7 +72,14 @@ class DockerInfo:
 
     @staticmethod
     def new(data: dict[str, Any]):
-        """Create a object from docker info."""
+        """Create a DockerInfo object from docker info.
+
+        Args:
+            data (dict[str, Any]): The docker info data.
+
+        Returns:
+            DockerInfo: The DockerInfo object.
+        """
         return DockerInfo(
             AwesomeVersion(data.get("ServerVersion", "0.0.0")),
             data.get("Driver", "unknown"),
@@ -70,7 +89,11 @@ class DockerInfo:
 
     @property
     def supported_version(self) -> bool:
-        """Return true, if docker version is supported."""
+        """Return true if docker version is supported.
+
+        Returns:
+            bool: True if the Docker version is supported, False otherwise.
+        """
         try:
             return self.version >= MIN_SUPPORTED_DOCKER
         except AwesomeVersionCompareException:
@@ -78,14 +101,21 @@ class DockerInfo:
 
     @property
     def support_cpu_realtime(self) -> bool:
-        """Return true, if CONFIG_RT_GROUP_SCHED is loaded."""
+        """Return true if CONFIG_RT_GROUP_SCHED is loaded.
+
+        Returns:
+            bool: True if CONFIG_RT_GROUP_SCHED is loaded, False otherwise.
+        """
         if not Path("/sys/fs/cgroup/cpu/cpu.rt_runtime_us").exists():
             return False
         return bool(os.environ.get(ENV_SUPERVISOR_CPU_RT, 0))
 
 
 class DockerConfig(FileConfiguration):
-    """Home Assistant core object for Docker configuration."""
+    """Home Assistant core object for Docker configuration.
+
+    This class manages the Docker configuration for Home Assistant.
+    """
 
     def __init__(self):
         """Initialize the JSON configuration."""
@@ -93,18 +123,27 @@ class DockerConfig(FileConfiguration):
 
     @property
     def registries(self) -> dict[str, Any]:
-        """Return credentials for docker registries."""
+        """Return credentials for docker registries.
+
+        Returns:
+            dict[str, Any]: Credentials for Docker registries.
+        """
         return self._data.get(ATTR_REGISTRIES, {})
 
 
 class DockerAPI:
     """Docker Supervisor wrapper.
 
+    This class provides methods to interact with the Docker API, including running containers, pulling images, and managing networks.
     This class is not AsyncIO safe!
     """
 
     def __init__(self, coresys: CoreSys):
-        """Initialize Docker base wrapper."""
+        """Initialize Docker base wrapper.
+
+        Args:
+            coresys (CoreSys): CoreSys instance.
+        """
         self.docker: DockerClient = DockerClient(
             base_url=f"unix:/{str(SOCKET_DOCKER)}", version="auto", timeout=900
         )
@@ -115,32 +154,56 @@ class DockerAPI:
 
     @property
     def images(self) -> ImageCollection:
-        """Return API images."""
+        """Return API images.
+
+        Returns:
+            ImageCollection: Docker image collection.
+        """
         return self.docker.images
 
     @property
     def containers(self) -> ContainerCollection:
-        """Return API containers."""
+        """Return API containers.
+
+        Returns:
+            ContainerCollection: Docker container collection.
+        """
         return self.docker.containers
 
     @property
     def api(self) -> APIClient:
-        """Return API containers."""
+        """Return API containers.
+
+        Returns:
+            APIClient: Docker API client.
+        """
         return self.docker.api
 
     @property
     def info(self) -> DockerInfo:
-        """Return local docker info."""
+        """Return local docker info.
+
+        Returns:
+            DockerInfo: Local Docker information.
+        """
         return self._info
 
     @property
     def events(self) -> CancellableStream:
-        """Return docker event stream."""
+        """Return docker event stream.
+
+        Returns:
+            CancellableStream: Docker event stream.
+        """
         return self.docker.events(decode=True)
 
     @property
     def monitor(self) -> DockerMonitor:
-        """Return docker events monitor."""
+        """Return docker events monitor.
+
+        Returns:
+            DockerMonitor: Docker events monitor.
+        """
         return self._monitor
 
     async def load(self) -> None:
@@ -161,7 +224,20 @@ class DockerAPI:
     ) -> Container:
         """Create a Docker container and run it.
 
-        Need run inside executor.
+        Args:
+            image (str): Docker image name.
+            tag (str, optional): Docker image tag. Defaults to "latest".
+            dns (bool, optional): Whether to set up DNS. Defaults to True.
+            ipv4 (IPv4Address | None, optional): IPv4 address. Defaults to None.
+            **kwargs (Any): Additional arguments for creating the container.
+
+        Returns:
+            Container: Docker container.
+
+        Raises:
+            DockerNotFound: If the Docker image is not found.
+            DockerAPIError: If there is an error with the Docker API.
+            DockerRequestError: If there is a request error with Docker.
         """
         name: str | None = kwargs.get("name")
         network_mode: str | None = kwargs.get("network_mode")
@@ -255,7 +331,17 @@ class DockerAPI:
     ) -> CommandReturn:
         """Create a temporary container and run command.
 
-        Need run inside executor.
+        Args:
+            image (str): Docker image name.
+            tag (str, optional): Docker image tag. Defaults to "latest".
+            command (str | None, optional): Command to run. Defaults to None.
+            **kwargs (Any): Additional arguments for running the command.
+
+        Returns:
+            CommandReturn: The result of the command execution.
+
+        Raises:
+            DockerError: If there is an error during the command execution.
         """
         stdout = kwargs.get("stdout", True)
         stderr = kwargs.get("stderr", True)
@@ -339,6 +425,12 @@ class DockerAPI:
         """Prune stale container from network.
 
         Fix: https://github.com/moby/moby/issues/23302
+
+        Args:
+            network_name (str): Name of the network.
+
+        Raises:
+            DockerError: If there is an error during the network pruning.
         """
         network: Network = self.docker.networks.get(network_name)
 
@@ -362,7 +454,19 @@ class DockerAPI:
     def container_is_initialized(
         self, name: str, image: str, version: AwesomeVersion
     ) -> bool:
-        """Return True if docker container exists in good state and is built from expected image."""
+        """Return True if docker container exists in good state and is built from expected image.
+
+        Args:
+            name (str): Name of the Docker container.
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+
+        Returns:
+            bool: True if the Docker container exists in good state and is built from the expected image, False otherwise.
+
+        Raises:
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container = self.containers.get(name)
             docker_image = self.images.get(f"{image}:{version}")
@@ -380,7 +484,17 @@ class DockerAPI:
     def stop_container(
         self, name: str, timeout: int, remove_container: bool = True
     ) -> None:
-        """Stop/remove Docker container."""
+        """Stop/remove Docker container.
+
+        Args:
+            name (str): Name of the Docker container.
+            timeout (int): Timeout value for stopping the container.
+            remove_container (bool, optional): Whether to remove the container. Defaults to True.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container: Container = self.containers.get(name)
         except NotFound:
@@ -399,7 +513,15 @@ class DockerAPI:
                 docker_container.remove(force=True)
 
     def start_container(self, name: str) -> None:
-        """Start Docker container."""
+        """Start Docker container.
+
+        Args:
+            name (str): Name of the Docker container.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container: Container = self.containers.get(name)
         except NotFound:
@@ -418,7 +540,16 @@ class DockerAPI:
             raise DockerError(f"Can't start {name}: {err}", _LOGGER.error) from err
 
     def restart_container(self, name: str, timeout: int) -> None:
-        """Restart docker container."""
+        """Restart docker container.
+
+        Args:
+            name (str): Name of the Docker container.
+            timeout (int): Timeout value for restarting the container.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             container: Container = self.containers.get(name)
         except NotFound:
@@ -433,7 +564,19 @@ class DockerAPI:
             raise DockerError(f"Can't restart {name}: {err}", _LOGGER.warning) from err
 
     def container_logs(self, name: str, tail: int = 100) -> bytes:
-        """Return Docker logs of container."""
+        """Return Docker logs of container.
+
+        Args:
+            name (str): Name of the Docker container.
+            tail (int, optional): Number of log lines to retrieve. Defaults to 100.
+
+        Returns:
+            bytes: Docker logs.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container: Container = self.containers.get(name)
         except NotFound:
@@ -449,7 +592,18 @@ class DockerAPI:
             ) from err
 
     def container_stats(self, name: str) -> dict[str, Any]:
-        """Read and return stats from container."""
+        """Read and return stats from container.
+
+        Args:
+            name (str): Name of the Docker container.
+
+        Returns:
+            dict[str, Any]: Container statistics.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container: Container = self.containers.get(name)
         except NotFound:
@@ -469,7 +623,19 @@ class DockerAPI:
             ) from err
 
     def container_run_inside(self, name: str, command: str) -> CommandReturn:
-        """Execute a command inside Docker container."""
+        """Execute a command inside Docker container.
+
+        Args:
+            name (str): Name of the Docker container.
+            command (str): Command to execute.
+
+        Returns:
+            CommandReturn: The result of the command execution.
+
+        Raises:
+            DockerNotFound: If the Docker container is not found.
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container: Container = self.containers.get(name)
         except NotFound:
@@ -488,7 +654,16 @@ class DockerAPI:
     def remove_image(
         self, image: str, version: AwesomeVersion, latest: bool = True
     ) -> None:
-        """Remove a Docker image by version and latest."""
+        """Remove a Docker image by version and latest.
+
+        Args:
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+            latest (bool, optional): Whether to remove the latest tag. Defaults to True.
+
+        Raises:
+            DockerError: If there is an error with Docker.
+        """
         try:
             if latest:
                 _LOGGER.info("Removing image %s with latest", image)
@@ -505,7 +680,17 @@ class DockerAPI:
             ) from err
 
     def import_image(self, tar_file: Path) -> Image | None:
-        """Import a tar file as image."""
+        """Import a tar file as image.
+
+        Args:
+            tar_file (Path): Path to the tar file.
+
+        Returns:
+            Image | None: Imported Docker image.
+
+        Raises:
+            DockerError: If there is an error during the import.
+        """
         try:
             with tar_file.open("rb") as read_tar:
                 docker_image_list: list[Image] = self.images.load(read_tar)
@@ -523,7 +708,16 @@ class DockerAPI:
             ) from err
 
     def export_image(self, image: str, version: AwesomeVersion, tar_file: Path) -> None:
-        """Export current images into a tar file."""
+        """Export current images into a tar file.
+
+        Args:
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+            tar_file (Path): Path to the tar file.
+
+        Raises:
+            DockerError: If there is an error during the export.
+        """
         try:
             image = self.api.get_image(f"{image}:{version}")
         except (DockerException, requests.RequestException) as err:
@@ -551,7 +745,18 @@ class DockerAPI:
         *,
         keep_images: set[str] | None = None,
     ) -> None:
-        """Clean up old versions of an image."""
+        """Clean up old versions of an image.
+
+        Args:
+            current_image (str): Current Docker image name.
+            current_version (AwesomeVersion): Current Docker image version.
+            old_images (set[str] | None, optional): Set of old image names. Defaults to None.
+            keep_images (set[str] | None, optional): Set of images to keep. Defaults to None.
+
+        Raises:
+            DockerNotFound: If the current image is not found.
+            DockerError: If there is an error during the cleanup.
+        """
         image = f"{current_image}:{current_version!s}"
         try:
             keep: set[str] = {self.images.get(image).id}

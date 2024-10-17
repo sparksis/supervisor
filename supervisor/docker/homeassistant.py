@@ -34,28 +34,47 @@ ENV_S6_GRACETIME = re.compile(r"^S6_SERVICES_GRACETIME=([0-9]+)$")
 
 
 class DockerHomeAssistant(DockerInterface):
-    """Docker Supervisor wrapper for Home Assistant."""
+    """Docker Supervisor wrapper for Home Assistant.
+
+    This class provides methods to manage Docker containers for Home Assistant, including running, updating, and stopping containers.
+    """
 
     @property
     def machine(self) -> str | None:
-        """Return machine of Home Assistant Docker image."""
+        """Return machine of Home Assistant Docker image.
+
+        Returns:
+            str | None: Machine of the Home Assistant Docker image.
+        """
         if self._meta and LABEL_MACHINE in self._meta["Config"]["Labels"]:
             return self._meta["Config"]["Labels"][LABEL_MACHINE]
         return None
 
     @property
     def image(self) -> str:
-        """Return name of Docker image."""
+        """Return name of Docker image.
+
+        Returns:
+            str: Name of the Docker image.
+        """
         return self.sys_homeassistant.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return _HASS_DOCKER_NAME
 
     @property
     def timeout(self) -> int:
-        """Return timeout for Docker actions."""
+        """Return timeout for Docker actions.
+
+        Returns:
+            int: Timeout value.
+        """
         # Use S6_SERVICES_GRACETIME to avoid killing Home Assistant Core, see
         # https://github.com/home-assistant/core/tree/dev/Dockerfile
         if self.meta_config and "Env" in self.meta_config:
@@ -68,12 +87,20 @@ class DockerHomeAssistant(DockerInterface):
 
     @property
     def ip_address(self) -> IPv4Address:
-        """Return IP address of this container."""
+        """Return IP address of this container.
+
+        Returns:
+            IPv4Address: IP address of the container.
+        """
         return self.sys_docker.network.gateway
 
     @property
     def cgroups_rules(self) -> list[str]:
-        """Return a list of needed cgroups permission."""
+        """Return a list of needed cgroups permission.
+
+        Returns:
+            list[str]: List of cgroups rules.
+        """
         return (
             []
             if self.sys_homeassistant.version == LANDINGPAGE
@@ -87,7 +114,11 @@ class DockerHomeAssistant(DockerInterface):
 
     @property
     def mounts(self) -> list[Mount]:
-        """Return mounts for container."""
+        """Return mounts for container.
+
+        Returns:
+            list[Mount]: List of mounts.
+        """
         mounts = [
             MOUNT_DEV,
             MOUNT_DBUS,
@@ -160,7 +191,10 @@ class DockerHomeAssistant(DockerInterface):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the Home Assistant container.
+        """
         await self._run(
             tag=(self.sys_homeassistant.version),
             name=self.name,
@@ -196,7 +230,14 @@ class DockerHomeAssistant(DockerInterface):
         on_condition=DockerJobError,
     )
     async def execute_command(self, command: str) -> CommandReturn:
-        """Create a temporary container and run command."""
+        """Create a temporary container and run command.
+
+        Args:
+            command (str): Command to run in the temporary container.
+
+        Returns:
+            CommandReturn: Result of the command execution.
+        """
         return await self.sys_run_in_executor(
             self.sys_docker.run_command,
             self.image,
@@ -232,7 +273,11 @@ class DockerHomeAssistant(DockerInterface):
         )
 
     def is_initialize(self) -> Awaitable[bool]:
-        """Return True if Docker container exists."""
+        """Return True if Docker container exists.
+
+        Returns:
+            Awaitable[bool]: True if the Docker container exists, False otherwise.
+        """
         return self.sys_run_in_executor(
             self.sys_docker.container_is_initialized,
             self.name,
@@ -243,7 +288,13 @@ class DockerHomeAssistant(DockerInterface):
     async def _validate_trust(
         self, image_id: str, image: str, version: AwesomeVersion
     ) -> None:
-        """Validate trust of content."""
+        """Validate trust of content.
+
+        Args:
+            image_id (str): Image ID.
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+        """
         try:
             if version != LANDINGPAGE and version < _VERIFY_TRUST:
                 return

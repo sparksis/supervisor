@@ -66,10 +66,18 @@ NO_ADDDRESS = ip_address("0.0.0.0")
 
 
 class DockerAddon(DockerInterface):
-    """Docker Supervisor wrapper for Home Assistant."""
+    """Docker Supervisor wrapper for Home Assistant add-ons.
+
+    This class provides methods to manage Docker containers for add-ons, including running, updating, and stopping containers.
+    """
 
     def __init__(self, coresys: CoreSys, addon: Addon):
-        """Initialize Docker Home Assistant wrapper."""
+        """Initialize Docker Home Assistant wrapper.
+
+        Args:
+            coresys (CoreSys): CoreSys instance.
+            addon (Addon): Addon instance.
+        """
         self.addon: Addon = addon
         super().__init__(coresys)
 
@@ -77,17 +85,32 @@ class DockerAddon(DockerInterface):
 
     @staticmethod
     def slug_to_name(slug: str) -> str:
-        """Convert slug to container name."""
+        """Convert slug to container name.
+
+        Args:
+            slug (str): Addon slug.
+
+        Returns:
+            str: Container name.
+        """
         return f"addon_{slug}"
 
     @property
     def image(self) -> str | None:
-        """Return name of Docker image."""
+        """Return name of Docker image.
+
+        Returns:
+            str | None: Docker image name.
+        """
         return self.addon.image
 
     @property
     def ip_address(self) -> IPv4Address:
-        """Return IP address of this container."""
+        """Return IP address of this container.
+
+        Returns:
+            IPv4Address: IP address of the container.
+        """
         if self.addon.host_network:
             return self.sys_docker.network.gateway
 
@@ -101,29 +124,49 @@ class DockerAddon(DockerInterface):
 
     @property
     def timeout(self) -> int:
-        """Return timeout for Docker actions."""
+        """Return timeout for Docker actions.
+
+        Returns:
+            int: Timeout value.
+        """
         return self.addon.timeout
 
     @property
     def version(self) -> AwesomeVersion:
-        """Return version of Docker image."""
+        """Return version of Docker image.
+
+        Returns:
+            AwesomeVersion: Docker image version.
+        """
         return self.addon.version
 
     @property
     def arch(self) -> str:
-        """Return arch of Docker image."""
+        """Return arch of Docker image.
+
+        Returns:
+            str: Docker image architecture.
+        """
         if self.addon.legacy:
             return self.sys_arch.default
         return super().arch
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Docker container name.
+        """
         return DockerAddon.slug_to_name(self.addon.slug)
 
     @property
     def environment(self) -> dict[str, str | None]:
-        """Return environment for Docker add-on."""
+        """Return environment for Docker add-on.
+
+        Returns:
+            dict[str, str | None]: Environment variables for the add-on.
+        """
         addon_env = self.addon.environment or {}
 
         # Provide options for legacy add-ons
@@ -143,7 +186,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def cgroups_rules(self) -> list[str] | None:
-        """Return a list of needed cgroups permission."""
+        """Return a list of needed cgroups permission.
+
+        Returns:
+            list[str] | None: List of cgroups rules.
+        """
         rules = set()
 
         # Attach correct cgroups for static devices
@@ -202,7 +249,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def ports(self) -> dict[str, str | int | None] | None:
-        """Filter None from add-on ports."""
+        """Filter None from add-on ports.
+
+        Returns:
+            dict[str, str | int | None] | None: Filtered ports.
+        """
         if self.addon.host_network or not self.addon.ports:
             return None
 
@@ -214,7 +265,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def security_opt(self) -> list[str]:
-        """Control security options."""
+        """Control security options.
+
+        Returns:
+            list[str]: Security options.
+        """
         security = super().security_opt
 
         # AppArmor
@@ -230,7 +285,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def tmpfs(self) -> dict[str, str] | None:
-        """Return tmpfs for Docker add-on."""
+        """Return tmpfs for Docker add-on.
+
+        Returns:
+            dict[str, str] | None: Tmpfs settings.
+        """
         tmpfs = {}
 
         if self.addon.with_tmpfs:
@@ -246,7 +305,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def network_mapping(self) -> dict[str, IPv4Address]:
-        """Return hosts mapping."""
+        """Return hosts mapping.
+
+        Returns:
+            dict[str, IPv4Address]: Network mapping.
+        """
         return {
             "supervisor": self.sys_docker.network.supervisor,
             "hassio": self.sys_docker.network.supervisor,
@@ -254,28 +317,44 @@ class DockerAddon(DockerInterface):
 
     @property
     def network_mode(self) -> str | None:
-        """Return network mode for add-on."""
+        """Return network mode for add-on.
+
+        Returns:
+            str | None: Network mode.
+        """
         if self.addon.host_network:
             return "host"
         return None
 
     @property
     def pid_mode(self) -> str | None:
-        """Return PID mode for add-on."""
+        """Return PID mode for add-on.
+
+        Returns:
+            str | None: PID mode.
+        """
         if not self.addon.protected and self.addon.host_pid:
             return "host"
         return None
 
     @property
     def uts_mode(self) -> str | None:
-        """Return UTS mode for add-on."""
+        """Return UTS mode for add-on.
+
+        Returns:
+            str | None: UTS mode.
+        """
         if self.addon.host_uts:
             return "host"
         return None
 
     @property
     def capabilities(self) -> list[Capabilities] | None:
-        """Generate needed capabilities."""
+        """Generate needed capabilities.
+
+        Returns:
+            list[Capabilities] | None: List of capabilities.
+        """
         capabilities: set[Capabilities] = set(self.addon.privileged)
 
         # Need work with kernel modules
@@ -293,7 +372,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def ulimits(self) -> list[docker.types.Ulimit] | None:
-        """Generate ulimits for add-on."""
+        """Generate ulimits for add-on.
+
+        Returns:
+            list[docker.types.Ulimit] | None: List of ulimits.
+        """
         limits: list[docker.types.Ulimit] = []
 
         # Need schedule functions
@@ -311,7 +394,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def cpu_rt_runtime(self) -> int | None:
-        """Limit CPU real-time runtime in microseconds."""
+        """Limit CPU real-time runtime in microseconds.
+
+        Returns:
+            int | None: CPU real-time runtime limit.
+        """
         if not self.sys_docker.info.support_cpu_realtime:
             return None
 
@@ -322,7 +409,11 @@ class DockerAddon(DockerInterface):
 
     @property
     def mounts(self) -> list[Mount]:
-        """Return mounts for container."""
+        """Return mounts for container.
+
+        Returns:
+            list[Mount]: List of mounts.
+        """
         addon_mapping = self.addon.map_volumes
 
         target_data_path = ""
@@ -538,7 +629,11 @@ class DockerAddon(DockerInterface):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        Raises:
+            DockerNotFound: If the Docker image is not found.
+        """
         # Security check
         if not self.addon.protected:
             _LOGGER.warning("%s running with disabled protected mode!", self.addon.name)
@@ -610,7 +705,14 @@ class DockerAddon(DockerInterface):
         latest: bool = False,
         arch: CpuArch | None = None,
     ) -> None:
-        """Update a docker image."""
+        """Update a docker image.
+
+        Args:
+            version (AwesomeVersion): New version of the Docker image.
+            image (str | None, optional): Docker image name. Defaults to None.
+            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
+            arch (CpuArch | None, optional): CPU architecture. Defaults to None.
+        """
         image = image or self.image
 
         _LOGGER.info(
@@ -640,14 +742,30 @@ class DockerAddon(DockerInterface):
         *,
         need_build: bool | None = None,
     ) -> None:
-        """Pull Docker image or build it."""
+        """Pull Docker image or build it.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            image (str | None, optional): Docker image name. Defaults to None.
+            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
+            arch (CpuArch | None, optional): CPU architecture. Defaults to None.
+            need_build (bool | None, optional): Whether the image needs to be built. Defaults to None.
+        """
         if need_build is None and self.addon.need_build or need_build:
             await self._build(version, image)
         else:
             await super().install(version, image, latest, arch)
 
     async def _build(self, version: AwesomeVersion, image: str | None = None) -> None:
-        """Build a Docker container."""
+        """Build a Docker container.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            image (str | None, optional): Docker image name. Defaults to None.
+
+        Raises:
+            DockerError: If the build environment is invalid or the build fails.
+        """
         build_env = AddonBuild(self.coresys, self.addon)
         if not build_env.is_valid:
             _LOGGER.error("Invalid build environment, can't build this add-on!")
@@ -687,7 +805,14 @@ class DockerAddon(DockerInterface):
         on_condition=DockerJobError,
     )
     def export_image(self, tar_file: Path) -> Awaitable[None]:
-        """Export current images into a tar file."""
+        """Export current images into a tar file.
+
+        Args:
+            tar_file (Path): Path to the tar file.
+
+        Returns:
+            Awaitable[None]: Awaitable object.
+        """
         return self.sys_run_in_executor(
             self.sys_docker.export_image, self.image, self.version, tar_file
         )
@@ -698,7 +823,14 @@ class DockerAddon(DockerInterface):
         on_condition=DockerJobError,
     )
     async def import_image(self, tar_file: Path) -> None:
-        """Import a tar file as image."""
+        """Import a tar file as image.
+
+        Args:
+            tar_file (Path): Path to the tar file.
+
+        Raises:
+            DockerError: If the import fails.
+        """
         docker_image = await self.sys_run_in_executor(
             self.sys_docker.import_image, tar_file
         )
@@ -716,7 +848,13 @@ class DockerAddon(DockerInterface):
         image: str | None = None,
         version: AwesomeVersion | None = None,
     ) -> None:
-        """Check if old version exists and cleanup other versions of image not in use."""
+        """Check if old version exists and cleanup other versions of image not in use.
+
+        Args:
+            old_image (str | None, optional): Old image name. Defaults to None.
+            image (str | None, optional): Docker image name. Defaults to None.
+            version (AwesomeVersion | None, optional): Docker image version. Defaults to None.
+        """
         await self.sys_run_in_executor(
             self.sys_docker.cleanup_old_images,
             (image := image or self.image),
@@ -737,7 +875,14 @@ class DockerAddon(DockerInterface):
         on_condition=DockerJobError,
     )
     async def write_stdin(self, data: bytes) -> None:
-        """Write to add-on stdin."""
+        """Write to add-on stdin.
+
+        Args:
+            data (bytes): Data to write to stdin.
+
+        Raises:
+            DockerError: If the container is not running or the write fails.
+        """
         if not await self.is_running():
             raise DockerError()
 
@@ -746,7 +891,11 @@ class DockerAddon(DockerInterface):
     def _write_stdin(self, data: bytes) -> None:
         """Write to add-on stdin.
 
-        Need run inside executor.
+        Args:
+            data (bytes): Data to write to stdin.
+
+        Raises:
+            DockerError: If the write fails.
         """
         try:
             # Load needed docker objects
@@ -771,7 +920,11 @@ class DockerAddon(DockerInterface):
         on_condition=DockerJobError,
     )
     async def stop(self, remove_container: bool = True) -> None:
-        """Stop/remove Docker container."""
+        """Stop/remove Docker container.
+
+        Args:
+            remove_container (bool, optional): Whether to remove the container. Defaults to True.
+        """
         # DNS
         if self.ip_address != NO_ADDDRESS:
             try:
@@ -790,7 +943,13 @@ class DockerAddon(DockerInterface):
     async def _validate_trust(
         self, image_id: str, image: str, version: AwesomeVersion
     ) -> None:
-        """Validate trust of content."""
+        """Validate trust of content.
+
+        Args:
+            image_id (str): Image ID.
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+        """
         if not self.addon.signed:
             return
 
@@ -804,7 +963,14 @@ class DockerAddon(DockerInterface):
         internal=True,
     )
     async def _hardware_events(self, device: Device) -> None:
-        """Process Hardware events for adjust device access."""
+        """Process Hardware events for adjust device access.
+
+        Args:
+            device (Device): Device instance.
+
+        Raises:
+            DockerError: If the hardware event processing fails.
+        """
         if not any(
             device_path in (device.path, device.sysfs)
             for device_path in self.addon.static_devices

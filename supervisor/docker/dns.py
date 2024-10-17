@@ -17,16 +17,27 @@ DNS_DOCKER_NAME: str = "hassio_dns"
 
 
 class DockerDNS(DockerInterface, CoreSysAttributes):
-    """Docker Supervisor wrapper for Supervisor DNS."""
+    """Docker Supervisor wrapper for Supervisor DNS.
+
+    This class provides methods to manage Docker containers for DNS services.
+    """
 
     @property
     def image(self) -> str:
-        """Return name of Supervisor DNS image."""
+        """Return name of Supervisor DNS image.
+
+        Returns:
+            str: Name of the Supervisor DNS image.
+        """
         return self.sys_plugins.dns.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return DNS_DOCKER_NAME
 
     @Job(
@@ -35,7 +46,10 @@ class DockerDNS(DockerInterface, CoreSysAttributes):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the Supervisor DNS container.
+        """
         await self._run(
             tag=str(self.sys_plugins.dns.version),
             init=False,

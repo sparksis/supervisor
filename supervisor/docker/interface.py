@@ -80,10 +80,19 @@ def _container_state_from_model(docker_container: Container) -> ContainerState:
 
 
 class DockerInterface(JobGroup):
-    """Docker Supervisor interface."""
+    """Docker Supervisor interface.
+
+    This class provides an interface for managing Docker containers used by the Supervisor.
+    It includes methods for installing, running, stopping, and updating Docker containers,
+    as well as retrieving container metadata and statistics.
+    """
 
     def __init__(self, coresys: CoreSys):
-        """Initialize Docker base wrapper."""
+        """Initialize Docker base wrapper.
+
+        Args:
+            coresys (CoreSys): CoreSys instance.
+        """
         super().__init__(
             coresys,
             JOB_GROUP_DOCKER_INTERFACE.format_map(
@@ -96,43 +105,71 @@ class DockerInterface(JobGroup):
 
     @property
     def timeout(self) -> int:
-        """Return timeout for Docker actions."""
+        """Return timeout for Docker actions.
+
+        Returns:
+            int: Timeout value.
+        """
         return 10
 
     @property
     def name(self) -> str | None:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str | None: Docker container name.
+        """
         return None
 
     @property
     def meta_config(self) -> dict[str, Any]:
-        """Return meta data of configuration for container/image."""
+        """Return meta data of configuration for container/image.
+
+        Returns:
+            dict[str, Any]: Meta data of configuration.
+        """
         if not self._meta:
             return {}
         return self._meta.get("Config", {})
 
     @property
     def meta_host(self) -> dict[str, Any]:
-        """Return meta data of configuration for host."""
+        """Return meta data of configuration for host.
+
+        Returns:
+            dict[str, Any]: Meta data of host configuration.
+        """
         if not self._meta:
             return {}
         return self._meta.get("HostConfig", {})
 
     @property
     def meta_labels(self) -> dict[str, str]:
-        """Return meta data of labels for container/image."""
+        """Return meta data of labels for container/image.
+
+        Returns:
+            dict[str, str]: Meta data of labels.
+        """
         return self.meta_config.get("Labels") or {}
 
     @property
     def meta_mounts(self) -> list[dict[str, Any]]:
-        """Return meta data of mounts for container/image."""
+        """Return meta data of mounts for container/image.
+
+        Returns:
+            list[dict[str, Any]]: Meta data of mounts.
+        """
         if not self._meta:
             return []
         return self._meta.get("Mounts", [])
 
     @property
     def image(self) -> str | None:
-        """Return name of Docker image."""
+        """Return name of Docker image.
+
+        Returns:
+            str | None: Docker image name.
+        """
         try:
             return self.meta_config["Image"].partition(":")[0]
         except KeyError:
@@ -140,24 +177,40 @@ class DockerInterface(JobGroup):
 
     @property
     def version(self) -> AwesomeVersion | None:
-        """Return version of Docker image."""
+        """Return version of Docker image.
+
+        Returns:
+            AwesomeVersion | None: Docker image version.
+        """
         if LABEL_VERSION not in self.meta_labels:
             return None
         return AwesomeVersion(self.meta_labels[LABEL_VERSION])
 
     @property
     def arch(self) -> str | None:
-        """Return arch of Docker image."""
+        """Return arch of Docker image.
+
+        Returns:
+            str | None: Docker image architecture.
+        """
         return self.meta_labels.get(LABEL_ARCH)
 
     @property
     def in_progress(self) -> bool:
-        """Return True if a task is in progress."""
+        """Return True if a task is in progress.
+
+        Returns:
+            bool: True if a task is in progress, False otherwise.
+        """
         return self.active_job
 
     @property
     def restart_policy(self) -> RestartPolicy | None:
-        """Return restart policy of container."""
+        """Return restart policy of container.
+
+        Returns:
+            RestartPolicy | None: Restart policy of the container.
+        """
         if "RestartPolicy" not in self.meta_host:
             return None
 
@@ -166,18 +219,33 @@ class DockerInterface(JobGroup):
 
     @property
     def security_opt(self) -> list[str]:
-        """Control security options."""
+        """Control security options.
+
+        Returns:
+            list[str]: Security options.
+        """
         # Disable Seccomp / We don't support it official and it
         # causes problems on some types of host systems.
         return ["seccomp=unconfined"]
 
     @property
     def healthcheck(self) -> dict[str, Any] | None:
-        """Healthcheck of instance if it has one."""
+        """Healthcheck of instance if it has one.
+
+        Returns:
+            dict[str, Any] | None: Healthcheck configuration.
+        """
         return self.meta_config.get("Healthcheck")
 
     def _get_credentials(self, image: str) -> dict:
-        """Return a dictionay with credentials for docker login."""
+        """Return a dictionary with credentials for docker login.
+
+        Args:
+            image (str): Docker image name.
+
+        Returns:
+            dict: Dictionary with credentials.
+        """
         registry = None
         credentials = {}
         matcher = IMAGE_WITH_HOST.match(image)
@@ -206,7 +274,11 @@ class DockerInterface(JobGroup):
         return credentials
 
     async def _docker_login(self, image: str) -> None:
-        """Try to log in to the registry if there are credentials available."""
+        """Try to log in to the registry if there are credentials available.
+
+        Args:
+            image (str): Docker image name.
+        """
         if not self.sys_docker.config.registries:
             return
 
@@ -228,7 +300,18 @@ class DockerInterface(JobGroup):
         latest: bool = False,
         arch: CpuArch | None = None,
     ) -> None:
-        """Pull docker image."""
+        """Pull docker image.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            image (str | None, optional): Docker image name. Defaults to None.
+            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
+            arch (CpuArch | None, optional): CPU architecture. Defaults to None.
+
+        Raises:
+            DockerError: If there is an error during the installation.
+            DockerTrustError: If there is an error during content-trust verification.
+        """
         image = image or self.image
         arch = arch or self.sys_arch.supervisor
 
@@ -296,7 +379,11 @@ class DockerInterface(JobGroup):
         self._meta = docker_image.attrs
 
     async def exists(self) -> bool:
-        """Return True if Docker image exists in local repository."""
+        """Return True if Docker image exists in local repository.
+
+        Returns:
+            bool: True if Docker image exists, False otherwise.
+        """
         with suppress(docker.errors.DockerException, requests.RequestException):
             await self.sys_run_in_executor(
                 self.sys_docker.images.get, f"{self.image}:{self.version!s}"
@@ -305,7 +392,15 @@ class DockerInterface(JobGroup):
         return False
 
     async def is_running(self) -> bool:
-        """Return True if Docker is running."""
+        """Return True if Docker is running.
+
+        Returns:
+            bool: True if Docker is running, False otherwise.
+
+        Raises:
+            DockerAPIError: If there is an error with the Docker API.
+            DockerRequestError: If there is a request error with Docker.
+        """
         try:
             docker_container = await self.sys_run_in_executor(
                 self.sys_docker.containers.get, self.name
@@ -320,7 +415,15 @@ class DockerInterface(JobGroup):
         return docker_container.status == "running"
 
     async def current_state(self) -> ContainerState:
-        """Return current state of container."""
+        """Return current state of container.
+
+        Returns:
+            ContainerState: Current state of the container.
+
+        Raises:
+            DockerAPIError: If there is an error with the Docker API.
+            DockerRequestError: If there is a request error with Docker.
+        """
         try:
             docker_container = await self.sys_run_in_executor(
                 self.sys_docker.containers.get, self.name
@@ -338,7 +441,15 @@ class DockerInterface(JobGroup):
     async def attach(
         self, version: AwesomeVersion, *, skip_state_event_if_down: bool = False
     ) -> None:
-        """Attach to running Docker container."""
+        """Attach to running Docker container.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            skip_state_event_if_down (bool, optional): Whether to skip state event if the container is down. Defaults to False.
+
+        Raises:
+            DockerError: If there is an error during the attachment.
+        """
         with suppress(docker.errors.DockerException, requests.RequestException):
             docker_container = await self.sys_run_in_executor(
                 self.sys_docker.containers.get, self.name
@@ -376,11 +487,22 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        Raises:
+            NotImplementedError: This method should be implemented in a subclass.
+        """
         raise NotImplementedError()
 
     async def _run(self, **kwargs) -> None:
-        """Run Docker image with retry inf necessary."""
+        """Run Docker image with retry if necessary.
+
+        Args:
+            **kwargs: Additional arguments for running the Docker image.
+
+        Raises:
+            DockerNotFound: If the Docker image is not found.
+        """
         if await self.is_running():
             return
 
@@ -406,7 +528,11 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     async def stop(self, remove_container: bool = True) -> None:
-        """Stop/remove Docker container."""
+        """Stop/remove Docker container.
+
+        Args:
+            remove_container (bool, optional): Whether to remove the container. Defaults to True.
+        """
         with suppress(DockerNotFound):
             await self.sys_run_in_executor(
                 self.sys_docker.stop_container,
@@ -421,7 +547,11 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     def start(self) -> Awaitable[None]:
-        """Start Docker container."""
+        """Start Docker container.
+
+        Returns:
+            Awaitable[None]: Awaitable object.
+        """
         return self.sys_run_in_executor(self.sys_docker.start_container, self.name)
 
     @Job(
@@ -430,7 +560,11 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     async def remove(self, *, remove_image: bool = True) -> None:
-        """Remove Docker images."""
+        """Remove Docker images.
+
+        Args:
+            remove_image (bool, optional): Whether to remove the image. Defaults to True.
+        """
         # Cleanup container
         with suppress(DockerError):
             await self.stop()
@@ -453,7 +587,16 @@ class DockerInterface(JobGroup):
         expected_image: str,
         expected_arch: CpuArch | None = None,
     ) -> None:
-        """Check we have expected image with correct arch."""
+        """Check we have expected image with correct arch.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            expected_image (str): Expected Docker image name.
+            expected_arch (CpuArch | None, optional): Expected CPU architecture. Defaults to None.
+
+        Raises:
+            DockerError: If there is an error during the check.
+        """
         expected_arch = expected_arch or self.sys_arch.supervisor
         image_name = f"{expected_image}:{version!s}"
         if self.image == expected_image:
@@ -488,7 +631,13 @@ class DockerInterface(JobGroup):
     async def update(
         self, version: AwesomeVersion, image: str | None = None, latest: bool = False
     ) -> None:
-        """Update a Docker image."""
+        """Update a Docker image.
+
+        Args:
+            version (AwesomeVersion): New version of the Docker image.
+            image (str | None, optional): Docker image name. Defaults to None.
+            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
+        """
         image = image or self.image
 
         _LOGGER.info(
@@ -503,7 +652,11 @@ class DockerInterface(JobGroup):
             await self.stop()
 
     async def logs(self) -> bytes:
-        """Return Docker logs of container."""
+        """Return Docker logs of container.
+
+        Returns:
+            bytes: Docker logs.
+        """
         with suppress(DockerError):
             return await self.sys_run_in_executor(
                 self.sys_docker.container_logs, self.name
@@ -518,7 +671,13 @@ class DockerInterface(JobGroup):
         image: str | None = None,
         version: AwesomeVersion | None = None,
     ) -> None:
-        """Check if old version exists and cleanup."""
+        """Check if old version exists and cleanup.
+
+        Args:
+            old_image (str | None, optional): Old image name. Defaults to None.
+            image (str | None, optional): Docker image name. Defaults to None.
+            version (AwesomeVersion | None, optional): Docker image version. Defaults to None.
+        """
         await self.sys_run_in_executor(
             self.sys_docker.cleanup_old_images,
             image or self.image,
@@ -532,7 +691,11 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     def restart(self) -> Awaitable[None]:
-        """Restart docker container."""
+        """Restart docker container.
+
+        Returns:
+            Awaitable[None]: Awaitable object.
+        """
         return self.sys_run_in_executor(
             self.sys_docker.restart_container, self.name, self.timeout
         )
@@ -543,18 +706,36 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     async def execute_command(self, command: str) -> CommandReturn:
-        """Create a temporary container and run command."""
+        """Create a temporary container and run command.
+
+        Args:
+            command (str): Command to run.
+
+        Raises:
+            NotImplementedError: This method should be implemented in a subclass.
+        """
         raise NotImplementedError()
 
     async def stats(self) -> DockerStats:
-        """Read and return stats from container."""
+        """Read and return stats from container.
+
+        Returns:
+            DockerStats: Container statistics.
+        """
         stats = await self.sys_run_in_executor(
             self.sys_docker.container_stats, self.name
         )
         return DockerStats(stats)
 
     async def is_failed(self) -> bool:
-        """Return True if Docker is failing state."""
+        """Return True if Docker is in a failing state.
+
+        Returns:
+            bool: True if Docker is in a failing state, False otherwise.
+
+        Raises:
+            DockerError: If there is an error with Docker.
+        """
         try:
             docker_container = await self.sys_run_in_executor(
                 self.sys_docker.containers.get, self.name
@@ -572,7 +753,15 @@ class DockerInterface(JobGroup):
         return int(docker_container.attrs["State"]["ExitCode"]) != 0
 
     async def get_latest_version(self) -> AwesomeVersion:
-        """Return latest version of local image."""
+        """Return latest version of local image.
+
+        Returns:
+            AwesomeVersion: Latest version of the local image.
+
+        Raises:
+            DockerNotFound: If no version is found for the image.
+            DockerRequestError: If there is a request error with Docker.
+        """
         available_version: list[AwesomeVersion] = []
         try:
             for image in await self.sys_run_in_executor(
@@ -608,7 +797,14 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     def run_inside(self, command: str) -> Awaitable[CommandReturn]:
-        """Execute a command inside Docker container."""
+        """Execute a command inside Docker container.
+
+        Args:
+            command (str): Command to execute.
+
+        Returns:
+            Awaitable[CommandReturn]: Command return object.
+        """
         return self.sys_run_in_executor(
             self.sys_docker.container_run_inside, self.name, command
         )
@@ -616,7 +812,16 @@ class DockerInterface(JobGroup):
     async def _validate_trust(
         self, image_id: str, image: str, version: AwesomeVersion
     ) -> None:
-        """Validate trust of content."""
+        """Validate trust of content.
+
+        Args:
+            image_id (str): Image ID.
+            image (str): Docker image name.
+            version (AwesomeVersion): Docker image version.
+
+        Raises:
+            CodeNotaryError: If there is an error during content-trust verification.
+        """
         checksum = image_id.partition(":")[2]
         return await self.sys_security.verify_own_content(checksum)
 
@@ -626,7 +831,11 @@ class DockerInterface(JobGroup):
         on_condition=DockerJobError,
     )
     async def check_trust(self) -> None:
-        """Check trust of exists Docker image."""
+        """Check trust of existing Docker image.
+
+        Raises:
+            CodeNotaryError: If there is an error during content-trust verification.
+        """
         try:
             image = await self.sys_run_in_executor(
                 self.sys_docker.images.get, f"{self.image}:{self.version!s}"

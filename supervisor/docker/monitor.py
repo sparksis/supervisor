@@ -17,7 +17,14 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 @dataclass
 class DockerContainerStateEvent:
-    """Event for docker container state change."""
+    """Event for docker container state change.
+
+    Attributes:
+        name (str): Name of the Docker container.
+        state (ContainerState): State of the Docker container.
+        id (str): ID of the Docker container.
+        time (int): Time of the state change event.
+    """
 
     name: str
     state: ContainerState
@@ -26,17 +33,28 @@ class DockerContainerStateEvent:
 
 
 class DockerMonitor(CoreSysAttributes, Thread):
-    """Docker monitor for supervisor."""
+    """Docker monitor for supervisor.
+
+    This class monitors Docker events and processes state changes for managed containers.
+    """
 
     def __init__(self, coresys: CoreSys):
-        """Initialize Docker monitor object."""
+        """Initialize Docker monitor object.
+
+        Args:
+            coresys (CoreSys): CoreSys instance.
+        """
         super().__init__()
         self.coresys = coresys
         self._events: CancellableStream | None = None
         self._unlabeled_managed_containers: list[str] = []
 
     def watch_container(self, container: Container):
-        """If container is missing the managed label, add name to list."""
+        """If container is missing the managed label, add name to list.
+
+        Args:
+            container (Container): Docker container to watch.
+        """
         if LABEL_MANAGED not in container.labels:
             self._unlabeled_managed_containers += [container.name]
 

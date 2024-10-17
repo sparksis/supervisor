@@ -7,7 +7,11 @@ class DockerStats:
     """Hold stats data from container inside."""
 
     def __init__(self, stats):
-        """Initialize Docker stats."""
+        """Initialize Docker stats.
+
+        Args:
+            stats (dict): Dictionary containing Docker stats data.
+        """
         self._cpu = 0.0
         self._network_rx = 0
         self._network_tx = 0
@@ -49,7 +53,11 @@ class DockerStats:
             self._calc_block_io(stats["blkio_stats"])
 
     def _calc_cpu_percent(self, stats):
-        """Calculate CPU percent."""
+        """Calculate CPU percent.
+
+        Args:
+            stats (dict): Dictionary containing Docker stats data.
+        """
         cpu_delta = (
             stats["cpu_stats"]["cpu_usage"]["total_usage"]
             - stats["precpu_stats"]["cpu_usage"]["total_usage"]
@@ -65,13 +73,21 @@ class DockerStats:
             self._cpu = 0.0
 
     def _calc_network(self, networks):
-        """Calculate Network IO stats."""
+        """Calculate Network IO stats.
+
+        Args:
+            networks (dict): Dictionary containing network stats data.
+        """
         for _, stats in networks.items():
             self._network_rx += stats["rx_bytes"]
             self._network_tx += stats["tx_bytes"]
 
     def _calc_block_io(self, blkio):
-        """Calculate block IO stats."""
+        """Calculate block IO stats.
+
+        Args:
+            blkio (dict): Dictionary containing block IO stats data.
+        """
         for stats in blkio["io_service_bytes_recursive"]:
             if stats["op"] == "Read":
                 self._blk_read += stats["value"]
@@ -80,40 +96,72 @@ class DockerStats:
 
     @property
     def cpu_percent(self):
-        """Return CPU percent."""
+        """Return CPU percent.
+
+        Returns:
+            float: CPU usage percentage.
+        """
         return round(self._cpu, 2)
 
     @property
     def memory_usage(self):
-        """Return memory usage."""
+        """Return memory usage.
+
+        Returns:
+            int: Memory usage in bytes.
+        """
         return self._memory_usage
 
     @property
     def memory_limit(self):
-        """Return memory limit."""
+        """Return memory limit.
+
+        Returns:
+            int: Memory limit in bytes.
+        """
         return self._memory_limit
 
     @property
     def memory_percent(self):
-        """Return memory usage in percent."""
+        """Return memory usage in percent.
+
+        Returns:
+            float: Memory usage percentage.
+        """
         return round(self._memory_percent, 2)
 
     @property
     def network_rx(self):
-        """Return network rx stats."""
+        """Return network rx stats.
+
+        Returns:
+            int: Network received bytes.
+        """
         return self._network_rx
 
     @property
     def network_tx(self):
-        """Return network rx stats."""
+        """Return network tx stats.
+
+        Returns:
+            int: Network transmitted bytes.
+        """
         return self._network_tx
 
     @property
     def blk_read(self):
-        """Return block IO read stats."""
+        """Return block IO read stats.
+
+        Returns:
+            int: Block IO read bytes.
+        """
         return self._blk_read
 
     @property
     def blk_write(self):
-        """Return block IO write stats."""
+        """Return block IO write stats.
+
+        Returns:
+            int: Block IO write bytes.
+        """
         return self._blk_write
