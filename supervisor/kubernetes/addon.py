@@ -83,3 +83,38 @@ class KubernetesAddon:
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when deleting deployment: %s\n", e)
             raise KubernetesError() from e
+
+    def update_deployment(self) -> None:
+        """Update Kubernetes deployment for the addon."""
+        api_instance = client.AppsV1Api()
+        container = V1Container(
+            name=self.name,
+            image=self.addon.image,
+            ports=[client.V1ContainerPort(container_port=80)],
+            env=[client.V1EnvVar(name="SUPERVISOR_TOKEN", value=self.addon.supervisor_token)]
+        )
+        template = V1PodTemplateSpec(
+            metadata=V1ObjectMeta(labels={"app": self.name}),
+            spec=V1PodSpec(containers=[container])
+        )
+        spec = V1DeploymentSpec(
+            replicas=1,
+            template=template,
+            selector={'matchLabels': {'app': self.name}}
+        )
+        deployment = V1Deployment(
+            api_version="apps/v1",
+            kind="Deployment",
+            metadata=V1ObjectMeta(name=self.name),
+            spec=spec
+        )
+        try:
+            api_instance.patch_namespaced_deployment(
+                name=self.name,
+                namespace="default",
+                body=deployment
+            )
+            _LOGGER.info("Deployment %s updated", self.name)
+        except client.exceptions.ApiException as e:
+            _LOGGER.error("Exception when updating deployment: %s\n", e)
+            raise KubernetesError() from e
