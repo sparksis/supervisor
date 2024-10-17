@@ -8,7 +8,10 @@ from ..const import MACHINE_ID
 
 
 class Capabilities(StrEnum):
-    """Linux Capabilities."""
+    """Linux Capabilities.
+
+    This class defines various Linux capabilities that can be assigned to Docker containers.
+    """
 
     BPF = "BPF"
     DAC_READ_SEARCH = "DAC_READ_SEARCH"
@@ -26,7 +29,10 @@ class Capabilities(StrEnum):
 
 
 class ContainerState(StrEnum):
-    """State of supervisor managed docker container."""
+    """State of supervisor managed docker container.
+
+    This class defines the possible states of a Docker container managed by the supervisor.
+    """
 
     FAILED = "failed"
     HEALTHY = "healthy"
@@ -37,7 +43,10 @@ class ContainerState(StrEnum):
 
 
 class RestartPolicy(StrEnum):
-    """Restart policy of container."""
+    """Restart policy of container.
+
+    This class defines the possible restart policies for Docker containers.
+    """
 
     NO = "no"
     ON_FAILURE = "on-failure"
@@ -46,7 +55,10 @@ class RestartPolicy(StrEnum):
 
 
 class MountType(StrEnum):
-    """Mount type."""
+    """Mount type.
+
+    This class defines the possible types of mounts for Docker containers.
+    """
 
     BIND = "bind"
     VOLUME = "volume"
@@ -55,7 +67,10 @@ class MountType(StrEnum):
 
 
 class PropagationMode(StrEnum):
-    """Propagataion mode, only for bind type mounts."""
+    """Propagation mode, only for bind type mounts.
+
+    This class defines the possible propagation modes for bind type mounts in Docker containers.
+    """
 
     PRIVATE = "private"
     SHARED = "shared"

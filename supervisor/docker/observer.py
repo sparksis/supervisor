@@ -17,16 +17,27 @@ ENV_NETWORK_MASK: str = "NETWORK_MASK"
 
 
 class DockerObserver(DockerInterface, CoreSysAttributes):
-    """Docker Supervisor wrapper for observer plugin."""
+    """Docker Supervisor wrapper for observer plugin.
+
+    This class provides methods to manage Docker containers for the observer plugin.
+    """
 
     @property
     def image(self):
-        """Return name of observer image."""
+        """Return name of observer image.
+
+        Returns:
+            str: Name of the observer image.
+        """
         return self.sys_plugins.observer.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return OBSERVER_DOCKER_NAME
 
     @Job(
@@ -35,7 +46,10 @@ class DockerObserver(DockerInterface, CoreSysAttributes):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the observer plugin container.
+        """
         await self._run(
             tag=str(self.sys_plugins.observer.version),
             init=False,

@@ -20,57 +20,104 @@ class DockerNetwork:
     """
 
     def __init__(self, docker_client: docker.DockerClient):
-        """Initialize internal Supervisor network."""
+        """Initialize internal Supervisor network.
+
+        Args:
+            docker_client (docker.DockerClient): Docker client instance.
+        """
         self.docker: docker.DockerClient = docker_client
         self._network: docker.models.networks.Network = self._get_network()
 
     @property
     def name(self) -> str:
-        """Return name of network."""
+        """Return name of network.
+
+        Returns:
+            str: Name of the network.
+        """
         return DOCKER_NETWORK
 
     @property
     def network(self) -> docker.models.networks.Network:
-        """Return docker network."""
+        """Return docker network.
+
+        Returns:
+            docker.models.networks.Network: Docker network instance.
+        """
         return self._network
 
     @property
     def containers(self) -> list[str]:
-        """Return of connected containers from network."""
+        """Return list of connected containers from network.
+
+        Returns:
+            list[str]: List of connected container IDs.
+        """
         return list(self.network.attrs.get("Containers", {}).keys())
 
     @property
     def gateway(self) -> IPv4Address:
-        """Return gateway of the network."""
+        """Return gateway of the network.
+
+        Returns:
+            IPv4Address: Gateway IP address.
+        """
         return DOCKER_NETWORK_MASK[1]
 
     @property
     def supervisor(self) -> IPv4Address:
-        """Return supervisor of the network."""
+        """Return supervisor of the network.
+
+        Returns:
+            IPv4Address: Supervisor IP address.
+        """
         return DOCKER_NETWORK_MASK[2]
 
     @property
     def dns(self) -> IPv4Address:
-        """Return dns of the network."""
+        """Return dns of the network.
+
+        Returns:
+            IPv4Address: DNS IP address.
+        """
         return DOCKER_NETWORK_MASK[3]
 
     @property
     def audio(self) -> IPv4Address:
-        """Return audio of the network."""
+        """Return audio of the network.
+
+        Returns:
+            IPv4Address: Audio IP address.
+        """
         return DOCKER_NETWORK_MASK[4]
 
     @property
     def cli(self) -> IPv4Address:
-        """Return cli of the network."""
+        """Return cli of the network.
+
+        Returns:
+            IPv4Address: CLI IP address.
+        """
         return DOCKER_NETWORK_MASK[5]
 
     @property
     def observer(self) -> IPv4Address:
-        """Return observer of the network."""
+        """Return observer of the network.
+
+        Returns:
+            IPv4Address: Observer IP address.
+        """
         return DOCKER_NETWORK_MASK[6]
 
     def _get_network(self) -> docker.models.networks.Network:
-        """Get supervisor network."""
+        """Get supervisor network.
+
+        Returns:
+            docker.models.networks.Network: Docker network instance.
+
+        Raises:
+            DockerError: If the network cannot be created.
+        """
         try:
             return self.docker.networks.get(DOCKER_NETWORK)
         except docker.errors.NotFound:
@@ -84,13 +131,16 @@ class DockerNetwork:
 
         ipam_config = docker.types.IPAMConfig(pool_configs=[ipam_pool])
 
-        return self.docker.networks.create(
-            DOCKER_NETWORK,
-            driver="bridge",
-            ipam=ipam_config,
-            enable_ipv6=False,
-            options={"com.docker.network.bridge.name": DOCKER_NETWORK},
-        )
+        try:
+            return self.docker.networks.create(
+                DOCKER_NETWORK,
+                driver="bridge",
+                ipam=ipam_config,
+                enable_ipv6=False,
+                options={"com.docker.network.bridge.name": DOCKER_NETWORK},
+            )
+        except docker.errors.APIError as err:
+            raise DockerError(f"Can't create Supervisor network: {err}", _LOGGER.error) from err
 
     def attach_container(
         self,
@@ -100,7 +150,13 @@ class DockerNetwork:
     ) -> None:
         """Attach container to Supervisor network.
 
-        Need run inside executor.
+        Args:
+            container (docker.models.containers.Container): Docker container instance.
+            alias (list[str] | None, optional): List of aliases for the container. Defaults to None.
+            ipv4 (IPv4Address | None, optional): IPv4 address for the container. Defaults to None.
+
+        Raises:
+            DockerError: If the container cannot be linked to the network.
         """
         ipv4_address = str(ipv4) if ipv4 else None
 
@@ -127,7 +183,11 @@ class DockerNetwork:
     ) -> None:
         """Detach default Docker bridge.
 
-        Need run inside executor.
+        Args:
+            container (docker.models.containers.Container): Docker container instance.
+
+        Raises:
+            DockerError: If the container cannot be disconnected from the default bridge.
         """
         try:
             default_network = self.docker.networks.get("bridge")
@@ -145,6 +205,12 @@ class DockerNetwork:
         """Remove force a container from Network.
 
         Fix: https://github.com/moby/moby/issues/23302
+
+        Args:
+            container_name (str): Name of the container to remove.
+
+        Raises:
+            DockerError: If the container cannot be disconnected from the network.
         """
         try:
             self.network.disconnect(container_name, force=True)

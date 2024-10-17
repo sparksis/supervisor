@@ -15,16 +15,27 @@ CLI_DOCKER_NAME: str = "hassio_cli"
 
 
 class DockerCli(DockerInterface, CoreSysAttributes):
-    """Docker Supervisor wrapper for HA cli."""
+    """Docker Supervisor wrapper for HA cli.
+
+    This class provides methods to manage Docker containers for the Home Assistant CLI.
+    """
 
     @property
     def image(self):
-        """Return name of HA cli image."""
+        """Return name of HA cli image.
+
+        Returns:
+            str: Name of the HA cli image.
+        """
         return self.sys_plugins.cli.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return CLI_DOCKER_NAME
 
     @Job(
@@ -33,7 +44,10 @@ class DockerCli(DockerInterface, CoreSysAttributes):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the Home Assistant CLI container.
+        """
         await self._run(
             entrypoint=["/init"],
             tag=str(self.sys_plugins.cli.version),

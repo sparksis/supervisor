@@ -15,21 +15,36 @@ MULTICAST_DOCKER_NAME: str = "hassio_multicast"
 
 
 class DockerMulticast(DockerInterface, CoreSysAttributes):
-    """Docker Supervisor wrapper for HA multicast."""
+    """Docker Supervisor wrapper for HA multicast.
+
+    This class provides methods to manage Docker containers for the Home Assistant multicast service.
+    """
 
     @property
     def image(self):
-        """Return name of HA multicast image."""
+        """Return name of HA multicast image.
+
+        Returns:
+            str: Name of the HA multicast image.
+        """
         return self.sys_plugins.multicast.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return MULTICAST_DOCKER_NAME
 
     @property
     def capabilities(self) -> list[Capabilities]:
-        """Generate needed capabilities."""
+        """Generate needed capabilities.
+
+        Returns:
+            list[Capabilities]: List of required capabilities.
+        """
         return [Capabilities.NET_ADMIN]
 
     @Job(
@@ -38,7 +53,10 @@ class DockerMulticast(DockerInterface, CoreSysAttributes):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the Home Assistant multicast container.
+        """
         await self._run(
             tag=str(self.sys_plugins.multicast.version),
             init=False,
