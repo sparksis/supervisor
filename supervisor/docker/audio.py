@@ -28,21 +28,36 @@ AUDIO_DOCKER_NAME: str = "hassio_audio"
 
 
 class DockerAudio(DockerInterface, CoreSysAttributes):
-    """Docker Supervisor wrapper for Supervisor Audio."""
+    """Docker Supervisor wrapper for Supervisor Audio.
+
+    This class provides methods to manage Docker containers for audio services.
+    """
 
     @property
     def image(self) -> str:
-        """Return name of Supervisor Audio image."""
+        """Return name of Supervisor Audio image.
+
+        Returns:
+            str: Name of the Supervisor Audio image.
+        """
         return self.sys_plugins.audio.image
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Name of the Docker container.
+        """
         return AUDIO_DOCKER_NAME
 
     @property
     def mounts(self) -> list[Mount]:
-        """Return mounts for container."""
+        """Return mounts for container.
+
+        Returns:
+            list[Mount]: List of mounts for the container.
+        """
         mounts = [
             MOUNT_DEV,
             Mount(
@@ -63,25 +78,41 @@ class DockerAudio(DockerInterface, CoreSysAttributes):
 
     @property
     def cgroups_rules(self) -> list[str]:
-        """Return a list of needed cgroups permission."""
+        """Return a list of needed cgroups permission.
+
+        Returns:
+            list[str]: List of cgroups rules.
+        """
         return self.sys_hardware.policy.get_cgroups_rules(
             PolicyGroup.AUDIO
         ) + self.sys_hardware.policy.get_cgroups_rules(PolicyGroup.BLUETOOTH)
 
     @property
     def capabilities(self) -> list[Capabilities]:
-        """Generate needed capabilities."""
+        """Generate needed capabilities.
+
+        Returns:
+            list[Capabilities]: List of capabilities.
+        """
         return [Capabilities.SYS_NICE, Capabilities.SYS_RESOURCE]
 
     @property
     def ulimits(self) -> list[docker.types.Ulimit]:
-        """Generate ulimits for audio."""
+        """Generate ulimits for audio.
+
+        Returns:
+            list[docker.types.Ulimit]: List of ulimits.
+        """
         # Pulseaudio by default tries to use real-time scheduling with priority of 5.
         return [docker.types.Ulimit(name="rtprio", soft=10, hard=10)]
 
     @property
     def cpu_rt_runtime(self) -> int | None:
-        """Limit CPU real-time runtime in microseconds."""
+        """Limit CPU real-time runtime in microseconds.
+
+        Returns:
+            int | None: CPU real-time runtime limit.
+        """
         if not self.sys_docker.info.support_cpu_realtime:
             return None
         return DOCKER_CPU_RUNTIME_ALLOCATION
@@ -92,7 +123,10 @@ class DockerAudio(DockerInterface, CoreSysAttributes):
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run Docker image.
+
+        This method runs the Docker image for the Supervisor Audio container.
+        """
         await self._run(
             tag=str(self.sys_plugins.audio.version),
             init=False,

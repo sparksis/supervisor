@@ -19,26 +19,45 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 
 class DockerSupervisor(DockerInterface):
-    """Docker Supervisor wrapper for Supervisor."""
+    """Docker Supervisor wrapper for Supervisor.
+
+    This class provides methods to manage the Docker container for the Supervisor, including attaching, retagging, and updating the container.
+    """
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
+        """Return name of Docker container.
+
+        Returns:
+            str: Docker container name.
+        """
         return os.environ["SUPERVISOR_NAME"]
 
     @property
     def ip_address(self) -> IPv4Address:
-        """Return IP address of this container."""
+        """Return IP address of this container.
+
+        Returns:
+            IPv4Address: IP address of the container.
+        """
         return self.sys_docker.network.supervisor
 
     @property
     def privileged(self) -> bool:
-        """Return True if the container run with Privileged."""
+        """Return True if the container run with Privileged.
+
+        Returns:
+            bool: True if the container runs with Privileged, False otherwise.
+        """
         return self.meta_host.get("Privileged", False)
 
     @property
     def host_mounts_available(self) -> bool:
-        """Return True if container can see mounts on host within its data directory."""
+        """Return True if container can see mounts on host within its data directory.
+
+        Returns:
+            bool: True if the container can see mounts on the host within its data directory, False otherwise.
+        """
         return self._meta and any(
             mount.get("Propagation") == PropagationMode.SLAVE
             for mount in self.meta_mounts
@@ -49,7 +68,15 @@ class DockerSupervisor(DockerInterface):
     async def attach(
         self, version: AwesomeVersion, *, skip_state_event_if_down: bool = False
     ) -> None:
-        """Attach to running docker container."""
+        """Attach to running docker container.
+
+        Args:
+            version (AwesomeVersion): Version of the Docker image.
+            skip_state_event_if_down (bool, optional): Whether to skip state event if the container is down. Defaults to False.
+
+        Raises:
+            DockerError: If there is an error during the attachment.
+        """
         try:
             docker_container = await self.sys_run_in_executor(
                 self.sys_docker.containers.get, self.name
@@ -79,13 +106,20 @@ class DockerSupervisor(DockerInterface):
 
     @Job(name="docker_supervisor_retag", limit=JobExecutionLimit.GROUP_WAIT)
     def retag(self) -> Awaitable[None]:
-        """Retag latest image to version."""
+        """Retag latest image to version.
+
+        Returns:
+            Awaitable[None]: Awaitable object.
+        """
         return self.sys_run_in_executor(self._retag)
 
     def _retag(self) -> None:
         """Retag latest image to version.
 
         Need run inside executor.
+
+        Raises:
+            DockerError: If there is an error during the retagging.
         """
         try:
             docker_container = self.sys_docker.containers.get(self.name)
@@ -99,13 +133,28 @@ class DockerSupervisor(DockerInterface):
 
     @Job(name="docker_supervisor_update_start_tag", limit=JobExecutionLimit.GROUP_WAIT)
     def update_start_tag(self, image: str, version: AwesomeVersion) -> Awaitable[None]:
-        """Update start tag to new version."""
+        """Update start tag to new version.
+
+        Args:
+            image (str): Docker image name.
+            version (AwesomeVersion): Version of the Docker image.
+
+        Returns:
+            Awaitable[None]: Awaitable object.
+        """
         return self.sys_run_in_executor(self._update_start_tag, image, version)
 
     def _update_start_tag(self, image: str, version: AwesomeVersion) -> None:
         """Update start tag to new version.
 
         Need run inside executor.
+
+        Args:
+            image (str): Docker image name.
+            version (AwesomeVersion): Version of the Docker image.
+
+        Raises:
+            DockerError: If there is an error during the update.
         """
         try:
             docker_container = self.sys_docker.containers.get(self.name)

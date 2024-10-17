@@ -28,6 +28,12 @@ Releases are done in 3 stages (channels) with this structure:
 5. The [`stable.json`][stable] file is updated.
 6. The build that was pushed to `beta` will now be pushed to `stable`.
 
+## Supervisor Docker Package
+
+The `supervisor/docker` package is a comprehensive set of modules for managing Docker containers within the Home Assistant Supervisor. It includes various modules such as `docker.py`, `audio.py`, `cli.py`, `const.py`, `dns.py`, `homeassistant.py`, `interface.py`, `manager.py`, `monitor.py`, `multicast.py`, `network.py`, `observer.py`, `stats.py`, and `supervisor.py`. Each module has classes and methods that provide detailed functionality for managing Docker containers.
+
+For more information, please refer to the [Supervisor Docker Package Documentation](supervisor/docker/README.md).
+
 [development]: https://developers.home-assistant.io/docs/supervisor/development
 [stable]: https://github.com/home-assistant/version/blob/master/stable.json
 
