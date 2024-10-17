@@ -44,7 +44,7 @@ class KubernetesAPI:
             _LOGGER.info("Deployment %s created", name)
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when creating deployment: %s\n", e)
-            raise Exception(f"Exception when creating deployment: {e}")
+            raise Exception(f"Exception when creating deployment: {e}") from e
 
     def update_deployment(self, name: str, image: str, env: dict[str, str]) -> None:
         """Update Kubernetes deployment."""
@@ -78,7 +78,7 @@ class KubernetesAPI:
             _LOGGER.info("Deployment %s updated", name)
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when updating deployment: %s\n", e)
-            raise Exception(f"Exception when updating deployment: {e}")
+            raise Exception(f"Exception when updating deployment: {e}") from e
 
     def delete_deployment(self, name: str) -> None:
         """Delete Kubernetes deployment."""
@@ -92,4 +92,4 @@ class KubernetesAPI:
             _LOGGER.info("Deployment %s deleted", name)
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when deleting deployment: %s\n", e)
-            raise Exception(f"Exception when deleting deployment: {e}")
+            raise Exception(f"Exception when deleting deployment: {e}") from e

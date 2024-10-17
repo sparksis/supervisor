@@ -688,3 +688,10 @@ class MountJobError(MountError, JobException):
 
 class NetworkInterfaceNotFound(HassioError):
     """Raise on network interface not found."""
+
+
+# Kubernetes
+
+
+class KubernetesError(HassioError):
+    """Kubernetes exception."""
