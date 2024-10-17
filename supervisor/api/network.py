@@ -1,8 +1,8 @@
 """REST API for network."""
+
 import asyncio
 from collections.abc import Awaitable
-from dataclasses import replace
-from ipaddress import ip_address, ip_interface
+from ipaddress import IPv4Address, IPv4Interface, IPv6Address, IPv6Interface
 from typing import Any
 
 from aiohttp import web
@@ -48,18 +48,28 @@ from ..host.configuration import (
     Interface,
     InterfaceMethod,
     IpConfig,
+    IpSetting,
     VlanConfig,
     WifiConfig,
 )
 from ..host.const import AuthMethod, InterfaceType, WifiMode
 from .utils import api_process, api_validate
 
-_SCHEMA_IP_CONFIG = vol.Schema(
+_SCHEMA_IPV4_CONFIG = vol.Schema(
     {
-        vol.Optional(ATTR_ADDRESS): [vol.Coerce(ip_interface)],
+        vol.Optional(ATTR_ADDRESS): [vol.Coerce(IPv4Interface)],
         vol.Optional(ATTR_METHOD): vol.Coerce(InterfaceMethod),
-        vol.Optional(ATTR_GATEWAY): vol.Coerce(ip_address),
-        vol.Optional(ATTR_NAMESERVERS): [vol.Coerce(ip_address)],
+        vol.Optional(ATTR_GATEWAY): vol.Coerce(IPv4Address),
+        vol.Optional(ATTR_NAMESERVERS): [vol.Coerce(IPv4Address)],
+    }
+)
+
+_SCHEMA_IPV6_CONFIG = vol.Schema(
+    {
+        vol.Optional(ATTR_ADDRESS): [vol.Coerce(IPv6Interface)],
+        vol.Optional(ATTR_METHOD): vol.Coerce(InterfaceMethod),
+        vol.Optional(ATTR_GATEWAY): vol.Coerce(IPv6Address),
+        vol.Optional(ATTR_NAMESERVERS): [vol.Coerce(IPv6Address)],
     }
 )
 
@@ -76,18 +86,18 @@ _SCHEMA_WIFI_CONFIG = vol.Schema(
 # pylint: disable=no-value-for-parameter
 SCHEMA_UPDATE = vol.Schema(
     {
-        vol.Optional(ATTR_IPV4): _SCHEMA_IP_CONFIG,
-        vol.Optional(ATTR_IPV6): _SCHEMA_IP_CONFIG,
+        vol.Optional(ATTR_IPV4): _SCHEMA_IPV4_CONFIG,
+        vol.Optional(ATTR_IPV6): _SCHEMA_IPV6_CONFIG,
         vol.Optional(ATTR_WIFI): _SCHEMA_WIFI_CONFIG,
         vol.Optional(ATTR_ENABLED): vol.Boolean(),
     }
 )
 
 
-def ipconfig_struct(config: IpConfig) -> dict[str, Any]:
+def ipconfig_struct(config: IpConfig, setting: IpSetting) -> dict[str, Any]:
     """Return a dict with information about ip configuration."""
     return {
-        ATTR_METHOD: config.method,
+        ATTR_METHOD: setting.method,
         ATTR_ADDRESS: [address.with_prefixlen for address in config.address],
         ATTR_NAMESERVERS: [str(address) for address in config.nameservers],
         ATTR_GATEWAY: str(config.gateway) if config.gateway else None,
@@ -122,8 +132,8 @@ def interface_struct(interface: Interface) -> dict[str, Any]:
         ATTR_CONNECTED: interface.connected,
         ATTR_PRIMARY: interface.primary,
         ATTR_MAC: interface.mac,
-        ATTR_IPV4: ipconfig_struct(interface.ipv4) if interface.ipv4 else None,
-        ATTR_IPV6: ipconfig_struct(interface.ipv6) if interface.ipv6 else None,
+        ATTR_IPV4: ipconfig_struct(interface.ipv4, interface.ipv4setting),
+        ATTR_IPV6: ipconfig_struct(interface.ipv6, interface.ipv6setting),
         ATTR_WIFI: wifi_struct(interface.wifi) if interface.wifi else None,
         ATTR_VLAN: vlan_struct(interface.vlan) if interface.vlan else None,
     }
@@ -197,24 +207,26 @@ class APINetwork(CoreSysAttributes):
         # Apply config
         for key, config in body.items():
             if key == ATTR_IPV4:
-                interface.ipv4 = replace(
-                    interface.ipv4
-                    or IpConfig(InterfaceMethod.STATIC, [], None, [], None),
-                    **config,
+                interface.ipv4setting = IpSetting(
+                    config.get(ATTR_METHOD, InterfaceMethod.STATIC),
+                    config.get(ATTR_ADDRESS, []),
+                    config.get(ATTR_GATEWAY),
+                    config.get(ATTR_NAMESERVERS, []),
                 )
             elif key == ATTR_IPV6:
-                interface.ipv6 = replace(
-                    interface.ipv6
-                    or IpConfig(InterfaceMethod.STATIC, [], None, [], None),
-                    **config,
+                interface.ipv6setting = IpSetting(
+                    config.get(ATTR_METHOD, InterfaceMethod.STATIC),
+                    config.get(ATTR_ADDRESS, []),
+                    config.get(ATTR_GATEWAY),
+                    config.get(ATTR_NAMESERVERS, []),
                 )
             elif key == ATTR_WIFI:
-                interface.wifi = replace(
-                    interface.wifi
-                    or WifiConfig(
-                        WifiMode.INFRASTRUCTURE, "", AuthMethod.OPEN, None, None
-                    ),
-                    **config,
+                interface.wifi = WifiConfig(
+                    config.get(ATTR_MODE, WifiMode.INFRASTRUCTURE),
+                    config.get(ATTR_SSID, ""),
+                    config.get(ATTR_AUTH, AuthMethod.OPEN),
+                    config.get(ATTR_PSK, None),
+                    None,
                 )
             elif key == ATTR_ENABLED:
                 interface.enabled = config
@@ -256,24 +268,22 @@ class APINetwork(CoreSysAttributes):
 
         vlan_config = VlanConfig(vlan, interface.name)
 
-        ipv4_config = None
+        ipv4_setting = None
         if ATTR_IPV4 in body:
-            ipv4_config = IpConfig(
+            ipv4_setting = IpSetting(
                 body[ATTR_IPV4].get(ATTR_METHOD, InterfaceMethod.AUTO),
                 body[ATTR_IPV4].get(ATTR_ADDRESS, []),
                 body[ATTR_IPV4].get(ATTR_GATEWAY, None),
                 body[ATTR_IPV4].get(ATTR_NAMESERVERS, []),
-                None,
             )
 
-        ipv6_config = None
+        ipv6_setting = None
         if ATTR_IPV6 in body:
-            ipv6_config = IpConfig(
+            ipv6_setting = IpSetting(
                 body[ATTR_IPV6].get(ATTR_METHOD, InterfaceMethod.AUTO),
                 body[ATTR_IPV6].get(ATTR_ADDRESS, []),
                 body[ATTR_IPV6].get(ATTR_GATEWAY, None),
                 body[ATTR_IPV6].get(ATTR_NAMESERVERS, []),
-                None,
             )
 
         vlan_interface = Interface(
@@ -284,8 +294,10 @@ class APINetwork(CoreSysAttributes):
             True,
             False,
             InterfaceType.VLAN,
-            ipv4_config,
-            ipv6_config,
+            None,
+            ipv4_setting,
+            None,
+            ipv6_setting,
             None,
             vlan_config,
         )

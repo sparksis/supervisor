@@ -1,6 +1,7 @@
 """Test Store API."""
 
 import asyncio
+from pathlib import Path
 from unittest.mock import MagicMock, PropertyMock, patch
 
 from aiohttp.test_utils import TestClient
@@ -8,6 +9,7 @@ import pytest
 
 from supervisor.addons.addon import Addon
 from supervisor.arch import CpuArch
+from supervisor.config import CoreConfig
 from supervisor.const import AddonState
 from supervisor.coresys import CoreSys
 from supervisor.docker.addon import DockerAddon
@@ -91,8 +93,9 @@ async def test_api_store_repositories_repository(
 
 async def test_api_store_add_repository(api_client: TestClient, coresys: CoreSys):
     """Test POST /store/repositories REST API."""
-    with patch("supervisor.store.repository.Repository.load", return_value=None), patch(
-        "supervisor.store.repository.Repository.validate", return_value=True
+    with (
+        patch("supervisor.store.repository.Repository.load", return_value=None),
+        patch("supervisor.store.repository.Repository.validate", return_value=True),
     ):
         response = await api_client.post(
             "/store/repositories", json={"repository": REPO_URL}
@@ -176,10 +179,11 @@ async def test_api_store_update_healthcheck(
         nonlocal _container_events_task
         _container_events_task = asyncio.create_task(container_events())
 
-    with patch.object(DockerAddon, "run", new=container_events_task), patch.object(
-        DockerInterface, "install"
-    ), patch.object(DockerAddon, "is_running", return_value=False), patch.object(
-        CpuArch, "supported", new=PropertyMock(return_value=["amd64"])
+    with (
+        patch.object(DockerAddon, "run", new=container_events_task),
+        patch.object(DockerInterface, "install"),
+        patch.object(DockerAddon, "is_running", return_value=False),
+        patch.object(CpuArch, "supported", new=PropertyMock(return_value=["amd64"])),
     ):
         resp = await api_client.post(f"/store/addons/{TEST_ADDON_SLUG}/update")
 
@@ -188,3 +192,91 @@ async def test_api_store_update_healthcheck(
     assert resp.status == 200
 
     await _container_events_task
+
+
+@pytest.mark.parametrize("resource", ["store/addons", "addons"])
+async def test_api_store_addons_no_changelog(
+    api_client: TestClient, coresys: CoreSys, store_addon: AddonStore, resource: str
+):
+    """Test /store/addons/{addon}/changelog REST API.
+
+    Currently the frontend expects a valid body even in the error case. Make sure that is
+    what the API returns.
+    """
+    assert store_addon.with_changelog is False
+    resp = await api_client.get(f"/{resource}/{store_addon.slug}/changelog")
+    assert resp.status == 200
+    result = await resp.text()
+    assert result == "No changelog found for add-on test_store_addon!"
+
+
+@pytest.mark.parametrize("resource", ["store/addons", "addons"])
+async def test_api_detached_addon_changelog(
+    api_client: TestClient,
+    coresys: CoreSys,
+    install_addon_ssh: Addon,
+    tmp_supervisor_data: Path,
+    resource: str,
+):
+    """Test /store/addons/{addon}/changelog for an detached addon.
+
+    Currently the frontend expects a valid body even in the error case. Make sure that is
+    what the API returns.
+    """
+    (addons_dir := tmp_supervisor_data / "addons" / "local").mkdir()
+    with patch.object(
+        CoreConfig, "path_addons_local", new=PropertyMock(return_value=addons_dir)
+    ):
+        await coresys.store.load()
+
+    assert install_addon_ssh.is_detached is True
+    assert install_addon_ssh.with_changelog is False
+
+    resp = await api_client.get(f"/{resource}/{install_addon_ssh.slug}/changelog")
+    assert resp.status == 200
+    result = await resp.text()
+    assert result == "Addon local_ssh with version latest does not exist in the store"
+
+
+@pytest.mark.parametrize("resource", ["store/addons", "addons"])
+async def test_api_store_addons_no_documentation(
+    api_client: TestClient, coresys: CoreSys, store_addon: AddonStore, resource: str
+):
+    """Test /store/addons/{addon}/documentation REST API.
+
+    Currently the frontend expects a valid body even in the error case. Make sure that is
+    what the API returns.
+    """
+    assert store_addon.with_documentation is False
+    resp = await api_client.get(f"/{resource}/{store_addon.slug}/documentation")
+    assert resp.status == 200
+    result = await resp.text()
+    assert result == "No documentation found for add-on test_store_addon!"
+
+
+@pytest.mark.parametrize("resource", ["store/addons", "addons"])
+async def test_api_detached_addon_documentation(
+    api_client: TestClient,
+    coresys: CoreSys,
+    install_addon_ssh: Addon,
+    tmp_supervisor_data: Path,
+    resource: str,
+):
+    """Test /store/addons/{addon}/changelog for an detached addon.
+
+    Currently the frontend expects a valid body even in the error case. Make sure that is
+    what the API returns.
+    """
+    (addons_dir := tmp_supervisor_data / "addons" / "local").mkdir()
+    with patch.object(
+        CoreConfig, "path_addons_local", new=PropertyMock(return_value=addons_dir)
+    ):
+        await coresys.store.load()
+
+    assert install_addon_ssh.is_detached is True
+    assert install_addon_ssh.with_documentation is False
+
+    resp = await api_client.get(f"/{resource}/{install_addon_ssh.slug}/documentation")
+    assert resp.status == 200
+    result = await resp.text()
+    assert result == "Addon local_ssh with version latest does not exist in the store"

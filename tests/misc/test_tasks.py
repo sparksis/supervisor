@@ -28,9 +28,10 @@ async def test_watchdog_homeassistant_api(
     tasks: Tasks, caplog: pytest.LogCaptureFixture
 ):
     """Test watchdog of homeassistant api."""
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(HomeAssistantCore, "restart") as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(HomeAssistantCore, "restart") as restart,
+    ):
         await tasks._watchdog_homeassistant_api()
 
         restart.assert_not_called()
@@ -46,7 +47,7 @@ async def test_watchdog_homeassistant_api(
         restart.assert_called_once()
         assert "Watchdog missed an Home Assistant Core API response." not in caplog.text
         assert (
-            "Watchdog missed 2 Home Assistant Core API responses in a row. Restarting Home Assistant Core API!"
+            "Watchdog missed 2 Home Assistant Core API responses in a row. Restarting Home Assistant Core!"
             in caplog.text
         )
 
@@ -55,9 +56,10 @@ async def test_watchdog_homeassistant_api_off(tasks: Tasks, coresys: CoreSys):
     """Test watchdog of homeassistant api does not run when disabled."""
     coresys.homeassistant.watchdog = False
 
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(HomeAssistantCore, "restart") as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(HomeAssistantCore, "restart") as restart,
+    ):
         await tasks._watchdog_homeassistant_api()
         await tasks._watchdog_homeassistant_api()
         restart.assert_not_called()
@@ -67,9 +69,10 @@ async def test_watchdog_homeassistant_api_error_state(tasks: Tasks, coresys: Cor
     """Test watchdog of homeassistant api does not restart when in error state."""
     coresys.homeassistant.core._error_state = True
 
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(HomeAssistantCore, "restart") as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(HomeAssistantCore, "restart") as restart,
+    ):
         await tasks._watchdog_homeassistant_api()
         await tasks._watchdog_homeassistant_api()
         restart.assert_not_called()
@@ -79,9 +82,10 @@ async def test_watchdog_homeassistant_api_landing_page(tasks: Tasks, coresys: Co
     """Test watchdog of homeassistant api does not monitor landing page."""
     coresys.homeassistant.version = LANDINGPAGE
 
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(HomeAssistantCore, "restart") as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(HomeAssistantCore, "restart") as restart,
+    ):
         await tasks._watchdog_homeassistant_api()
         await tasks._watchdog_homeassistant_api()
         restart.assert_not_called()
@@ -93,9 +97,10 @@ async def test_watchdog_homeassistant_api_not_running(
     """Test watchdog of homeassistant api does not monitor when home assistant not running."""
     container.status = "stopped"
 
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(HomeAssistantCore, "restart") as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(HomeAssistantCore, "restart") as restart,
+    ):
         await tasks._watchdog_homeassistant_api()
         await tasks._watchdog_homeassistant_api()
         restart.assert_not_called()
@@ -105,35 +110,52 @@ async def test_watchdog_homeassistant_api_reanimation_limit(
     tasks: Tasks, caplog: pytest.LogCaptureFixture, capture_exception: Mock
 ):
     """Test watchdog of homeassistant api stops after max reanimation failures."""
-    with patch.object(
-        HomeAssistantAPI, "check_api_state", return_value=False
-    ), patch.object(
-        HomeAssistantCore, "restart", side_effect=(err := HomeAssistantError())
-    ) as restart:
+    with (
+        patch.object(HomeAssistantAPI, "check_api_state", return_value=False),
+        patch.object(
+            HomeAssistantCore, "restart", side_effect=(err := HomeAssistantError())
+        ) as restart,
+        patch.object(HomeAssistantCore, "rebuild", side_effect=err) as rebuild,
+    ):
         for _ in range(5):
             await tasks._watchdog_homeassistant_api()
             restart.assert_not_called()
 
             await tasks._watchdog_homeassistant_api()
-            restart.assert_called_once()
+            restart.assert_called_once_with()
             assert "Home Assistant watchdog reanimation failed!" in caplog.text
 
+            rebuild.assert_not_called()
             restart.reset_mock()
 
         capture_exception.assert_called_once_with(err)
 
+        # Next time it should try safe mode
         caplog.clear()
         await tasks._watchdog_homeassistant_api()
+        rebuild.assert_not_called()
 
+        await tasks._watchdog_homeassistant_api()
+
+        rebuild.assert_called_once_with(safe_mode=True)
         restart.assert_not_called()
-        assert "Watchdog missed an Home Assistant Core API response." not in caplog.text
-        assert "Watchdog found a problem with Home Assistant API!" not in caplog.text
         assert (
-            "Watchdog cannot reanimate Home Assistant Core, failed all 5 attempts."
+            "Watchdog cannot reanimate Home Assistant Core, failed all 5 attempts. Restarting into safe mode"
+            in caplog.text
+        )
+        assert (
+            "Safe mode restart failed. Watchdog cannot bring Home Assistant online."
             in caplog.text
         )
 
+        # After safe mode has failed too, no more restart attempts
+        rebuild.reset_mock()
         caplog.clear()
         await tasks._watchdog_homeassistant_api()
-        restart.assert_not_called()
+        assert "Watchdog missed an Home Assistant Core API response." in caplog.text
+
+        caplog.clear()
+        await tasks._watchdog_homeassistant_api()
         assert not caplog.text
+        restart.assert_not_called()
+        rebuild.assert_not_called()

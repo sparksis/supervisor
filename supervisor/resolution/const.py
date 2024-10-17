@@ -1,4 +1,5 @@
 """Constants for the resoulution manager."""
+
 from enum import StrEnum
 from pathlib import Path
 
@@ -73,6 +74,8 @@ class IssueType(StrEnum):
     CORRUPT_DOCKER = "corrupt_docker"
     CORRUPT_REPOSITORY = "corrupt_repository"
     CORRUPT_FILESYSTEM = "corrupt_filesystem"
+    DETACHED_ADDON_MISSING = "detached_addon_missing"
+    DETACHED_ADDON_REMOVED = "detached_addon_removed"
     DISABLED_DATA_DISK = "disabled_data_disk"
     DNS_LOOP = "dns_loop"
     DNS_SERVER_FAILED = "dns_server_failed"

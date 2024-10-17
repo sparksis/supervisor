@@ -1,4 +1,5 @@
 """Constants file for Supervisor."""
+
 from dataclasses import dataclass
 from enum import StrEnum
 from ipaddress import ip_network
@@ -309,6 +310,8 @@ ATTR_SUPERVISOR_VERSION = "supervisor_version"
 ATTR_SUPPORTED = "supported"
 ATTR_SUPPORTED_ARCH = "supported_arch"
 ATTR_SYSTEM = "system"
+ATTR_SYSTEM_MANAGED = "system_managed"
+ATTR_SYSTEM_MANAGED_CONFIG_ENTRY = "system_managed_config_entry"
 ATTR_TIMEOUT = "timeout"
 ATTR_TIMEZONE = "timezone"
 ATTR_TITLE = "title"
@@ -379,11 +382,26 @@ ROLE_ADMIN = "admin"
 ROLE_ALL = [ROLE_DEFAULT, ROLE_HOMEASSISTANT, ROLE_BACKUP, ROLE_MANAGER, ROLE_ADMIN]
 
 
+class AddonBootConfig(StrEnum):
+    """Boot mode config for the add-on."""
+
+    AUTO = "auto"
+    MANUAL = "manual"
+    MANUAL_ONLY = "manual_only"
+
+
 class AddonBoot(StrEnum):
     """Boot mode for the add-on."""
 
     AUTO = "auto"
     MANUAL = "manual"
+
+    @classmethod
+    def _missing_(cls, value: str) -> Self | None:
+        """Convert 'forced' config values to their counterpart."""
+        if value == AddonBootConfig.MANUAL_ONLY:
+            return AddonBoot.MANUAL
+        return None
 
 
 class AddonStartup(StrEnum):

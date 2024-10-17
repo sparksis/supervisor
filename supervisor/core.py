@@ -1,4 +1,5 @@
 """Main file for Supervisor."""
+
 import asyncio
 from collections.abc import Awaitable
 from contextlib import suppress
@@ -344,9 +345,6 @@ class Core(CoreSysAttributes):
         # don't process scheduler anymore
         if self.state == CoreState.RUNNING:
             self.state = CoreState.SHUTDOWN
-
-        # Stop docker monitoring
-        await self.sys_docker.unload()
 
         # Shutdown Application Add-ons, using Home Assistant API
         await self.sys_addons.shutdown(AddonStartup.APPLICATION)

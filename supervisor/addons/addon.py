@@ -1,4 +1,5 @@
 """Init file for Supervisor add-ons."""
+
 import asyncio
 from collections.abc import Awaitable
 from contextlib import suppress
@@ -46,6 +47,8 @@ from ..const import (
     ATTR_SLUG,
     ATTR_STATE,
     ATTR_SYSTEM,
+    ATTR_SYSTEM_MANAGED,
+    ATTR_SYSTEM_MANAGED_CONFIG_ENTRY,
     ATTR_TYPE,
     ATTR_USER,
     ATTR_UUID,
@@ -54,6 +57,7 @@ from ..const import (
     ATTR_WATCHDOG,
     DNS_SUFFIX,
     AddonBoot,
+    AddonBootConfig,
     AddonStartup,
     AddonState,
     BusEvent,
@@ -308,7 +312,9 @@ class Addon(AddonModel):
 
     @property
     def boot(self) -> AddonBoot:
-        """Return boot config with prio local settings."""
+        """Return boot config with prio local settings unless config is forced."""
+        if self.boot_config == AddonBootConfig.MANUAL_ONLY:
+            return super().boot
         return self.persist.get(ATTR_BOOT, super().boot)
 
     @boot.setter
@@ -362,6 +368,37 @@ class Addon(AddonModel):
             )
         else:
             self.persist[ATTR_WATCHDOG] = value
+
+    @property
+    def system_managed(self) -> bool:
+        """Return True if addon is managed by Home Assistant."""
+        return self.persist[ATTR_SYSTEM_MANAGED]
+
+    @system_managed.setter
+    def system_managed(self, value: bool) -> None:
+        """Set system managed enable/disable."""
+        if not value and self.system_managed_config_entry:
+            self.system_managed_config_entry = None
+
+        self.persist[ATTR_SYSTEM_MANAGED] = value
+
+    @property
+    def system_managed_config_entry(self) -> str | None:
+        """Return id of config entry managing this addon (if any)."""
+        if not self.system_managed:
+            return None
+        return self.persist.get(ATTR_SYSTEM_MANAGED_CONFIG_ENTRY)
+
+    @system_managed_config_entry.setter
+    def system_managed_config_entry(self, value: str | None) -> None:
+        """Set ID of config entry managing this addon."""
+        if not self.system_managed:
+            _LOGGER.warning(
+                "Ignoring system managed config entry for %s because it is not system managed",
+                self.slug,
+            )
+        else:
+            self.persist[ATTR_SYSTEM_MANAGED_CONFIG_ENTRY] = value
 
     @property
     def uuid(self) -> str:
@@ -729,10 +766,12 @@ class Addon(AddonModel):
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=AddonsJobError,
     )
-    async def uninstall(self, *, remove_config: bool) -> None:
+    async def uninstall(
+        self, *, remove_config: bool, remove_image: bool = True
+    ) -> None:
         """Uninstall and cleanup this addon."""
         try:
-            await self.instance.remove()
+            await self.instance.remove(remove_image=remove_image)
         except DockerError as err:
             raise AddonsError() from err
 
@@ -1343,11 +1382,11 @@ class Addon(AddonModel):
                         )
                         raise AddonsError() from err
 
+            finally:
                 # Is add-on loaded
                 if not self.loaded:
                     await self.load()
 
-            finally:
                 # Run add-on
                 if data[ATTR_STATE] == AddonState.STARTED:
                     wait_for_start = await self.start()

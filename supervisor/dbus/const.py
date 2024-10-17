@@ -1,4 +1,5 @@
 """Constants for DBUS."""
+
 from enum import IntEnum, StrEnum
 from socket import AF_INET, AF_INET6
 
@@ -61,7 +62,8 @@ DBUS_OBJECT_RESOLVED = "/org/freedesktop/resolve1"
 DBUS_OBJECT_SETTINGS = "/org/freedesktop/NetworkManager/Settings"
 DBUS_OBJECT_SYSTEMD = "/org/freedesktop/systemd1"
 DBUS_OBJECT_TIMEDATE = "/org/freedesktop/timedate1"
-DBUS_OBJECT_UDISKS2 = "/org/freedesktop/UDisks2/Manager"
+DBUS_OBJECT_UDISKS2 = "/org/freedesktop/UDisks2"
+DBUS_OBJECT_UDISKS2_MANAGER = "/org/freedesktop/UDisks2/Manager"
 
 DBUS_ATTR_ACTIVE_ACCESSPOINT = "ActiveAccessPoint"
 DBUS_ATTR_ACTIVE_CONNECTION = "ActiveConnection"

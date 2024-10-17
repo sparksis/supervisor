@@ -1,4 +1,5 @@
 """Test Supervisor API."""
+
 # pylint: disable=protected-access
 from unittest.mock import MagicMock, patch
 
@@ -6,7 +7,12 @@ from aiohttp.test_utils import TestClient
 import pytest
 
 from supervisor.coresys import CoreSys
-from supervisor.exceptions import StoreGitError, StoreNotFound
+from supervisor.exceptions import (
+    HassioError,
+    HostNotSupportedError,
+    StoreGitError,
+    StoreNotFound,
+)
 from supervisor.store.repository import Repository
 
 from tests.api import common_test_api_advanced_logs
@@ -33,8 +39,9 @@ async def test_api_supervisor_options_add_repository(
     with pytest.raises(StoreNotFound):
         coresys.store.get_from_url(REPO_URL)
 
-    with patch("supervisor.store.repository.Repository.load", return_value=None), patch(
-        "supervisor.store.repository.Repository.validate", return_value=True
+    with (
+        patch("supervisor.store.repository.Repository.load", return_value=None),
+        patch("supervisor.store.repository.Repository.validate", return_value=True),
     ):
         response = await api_client.post(
             "/supervisor/options", json={"addons_repositories": [REPO_URL]}
@@ -66,11 +73,11 @@ async def test_api_supervisor_options_repositories_skipped_on_error(
     api_client: TestClient, coresys: CoreSys, git_error: StoreGitError
 ):
     """Test repositories skipped on error via POST /supervisor/options REST API."""
-    with patch(
-        "supervisor.store.repository.Repository.load", side_effect=git_error
-    ), patch(
-        "supervisor.store.repository.Repository.validate", return_value=False
-    ), patch("supervisor.store.repository.Repository.remove"):
+    with (
+        patch("supervisor.store.repository.Repository.load", side_effect=git_error),
+        patch("supervisor.store.repository.Repository.validate", return_value=False),
+        patch("supervisor.store.repository.Repository.remove"),
+    ):
         response = await api_client.post(
             "/supervisor/options", json={"addons_repositories": [REPO_URL]}
         )
@@ -160,7 +167,7 @@ async def test_api_supervisor_fallback(
     api_client: TestClient, journald_logs: MagicMock, docker_logs: MagicMock
 ):
     """Check that supervisor logs read from container logs if reading from journald gateway fails badly."""
-    journald_logs.side_effect = OSError("Something bad happened!")
+    journald_logs.side_effect = HassioError("Something bad happened!")
 
     with patch("supervisor.api._LOGGER.exception") as logger:
         resp = await api_client.get("/supervisor/logs")
@@ -175,6 +182,51 @@ async def test_api_supervisor_fallback(
         b"\x1b[36m22-10-11 14:04:23 DEBUG (MainThread) [supervisor.utils.dbus] D-Bus call - org.freedesktop.DBus.Properties.call_get_all on /io/hass/os\x1b[0m",
         b"\x1b[36m22-10-11 14:04:23 DEBUG (MainThread) [supervisor.utils.dbus] D-Bus call - org.freedesktop.DBus.Properties.call_get_all on /io/hass/os/AppArmor\x1b[0m",
     ]
+
+    # check fallback also works for the follow endpoint (no mock reset needed)
+
+    with patch("supervisor.api._LOGGER.exception") as logger:
+        resp = await api_client.get("/supervisor/logs/follow")
+        logger.assert_called_once_with(
+            "Failed to get supervisor logs using advanced_logs API"
+        )
+
+    assert resp.status == 200
+    assert resp.content_type == "text/plain"
+
+    journald_logs.reset_mock()
+
+    # also check generic Python error
+    journald_logs.side_effect = OSError("Something bad happened!")
+
+    with patch("supervisor.api._LOGGER.exception") as logger:
+        resp = await api_client.get("/supervisor/logs")
+        logger.assert_called_once_with(
+            "Failed to get supervisor logs using advanced_logs API"
+        )
+        assert resp.status == 200
+        assert resp.content_type == "text/plain"
+
+
+async def test_api_supervisor_fallback_log_capture(
+    api_client: TestClient, journald_logs: MagicMock, docker_logs: MagicMock
+):
+    """Check that Sentry log capture is executed only for unexpected errors."""
+    journald_logs.side_effect = HostNotSupportedError(
+        "No systemd-journal-gatewayd Unix socket available!"
+    )
+
+    with patch("supervisor.api.capture_exception") as capture_exception:
+        await api_client.get("/supervisor/logs")
+        capture_exception.assert_not_called()
+
+    journald_logs.reset_mock()
+
+    journald_logs.side_effect = HassioError("Something bad happened!")
+
+    with patch("supervisor.api.capture_exception") as capture_exception:
+        await api_client.get("/supervisor/logs")
+        capture_exception.assert_called_once()
 
 
 async def test_api_supervisor_reload(api_client: TestClient):

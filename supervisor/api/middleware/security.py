@@ -1,4 +1,5 @@
 """Handle security part of this API."""
+
 import logging
 import re
 from typing import Final
@@ -7,6 +8,8 @@ from urllib.parse import unquote
 from aiohttp.web import Request, RequestHandler, Response, middleware
 from aiohttp.web_exceptions import HTTPBadRequest, HTTPForbidden, HTTPUnauthorized
 from awesomeversion import AwesomeVersion
+
+from supervisor.homeassistant.const import LANDINGPAGE
 
 from ...addons.const import RE_SLUG
 from ...const import (
@@ -74,6 +77,13 @@ ADDONS_API_BYPASS: Final = re.compile(
     r"|/services.*"
     r"|/discovery.*"
     r"|/auth"
+    r")$"
+)
+
+# Home Assistant only
+CORE_ONLY_PATHS: Final = re.compile(
+    r"^(?:"
+    r"/addons/" + RE_SLUG + "/sys_options"
     r")$"
 )
 
@@ -232,6 +242,9 @@ class SecurityMiddleware(CoreSysAttributes):
         if supervisor_token == self.sys_homeassistant.supervisor_token:
             _LOGGER.debug("%s access from Home Assistant", request.path)
             request_from = self.sys_homeassistant
+        elif CORE_ONLY_PATHS.match(request.path):
+            _LOGGER.warning("Attempted access to %s from client besides Home Assistant")
+            raise HTTPForbidden()
 
         # Host
         if supervisor_token == self.sys_plugins.cli.supervisor_token:
@@ -277,8 +290,10 @@ class SecurityMiddleware(CoreSysAttributes):
     @middleware
     async def core_proxy(self, request: Request, handler: RequestHandler) -> Response:
         """Validate user from Core API proxy."""
-        if request[REQUEST_FROM] != self.sys_homeassistant or version_is_new_enough(
-            self.sys_homeassistant.version, _CORE_VERSION
+        if (
+            request[REQUEST_FROM] != self.sys_homeassistant
+            or self.sys_homeassistant.version == LANDINGPAGE
+            or version_is_new_enough(self.sys_homeassistant.version, _CORE_VERSION)
         ):
             return await handler(request)
 

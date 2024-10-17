@@ -1,4 +1,5 @@
 """Test the condition decorators."""
+
 import asyncio
 from datetime import datetime, timedelta
 from unittest.mock import ANY, AsyncMock, Mock, PropertyMock, patch
@@ -25,7 +26,10 @@ from supervisor.jobs.job_group import JobGroup
 from supervisor.os.manager import OSManager
 from supervisor.plugins.audio import PluginAudio
 from supervisor.resolution.const import UnhealthyReason
+from supervisor.supervisor import Supervisor
 from supervisor.utils.dt import utcnow
+
+from tests.common import reset_last_call
 
 
 async def test_healthy(coresys: CoreSys, caplog: pytest.LogCaptureFixture):
@@ -72,6 +76,7 @@ async def test_internet(
 ):
     """Test the internet decorator."""
     coresys.core.state = CoreState.RUNNING
+    reset_last_call(Supervisor.check_connectivity)
 
     class TestClass:
         """Test class."""
@@ -101,10 +106,11 @@ async def test_internet(
     mock_websession = AsyncMock()
     mock_websession.head.side_effect = head_side_effect
     coresys.supervisor.connectivity = None
-    with patch(
-        "supervisor.utils.dbus.DBus.call_dbus", return_value=connectivity
-    ), patch.object(
-        CoreSys, "websession", new=PropertyMock(return_value=mock_websession)
+    with (
+        patch("supervisor.utils.dbus.DBus.call_dbus", return_value=connectivity),
+        patch.object(
+            CoreSys, "websession", new=PropertyMock(return_value=mock_websession)
+        ),
     ):
         assert await test.execute_host() is host_result
         assert await test.execute_system() is system_result
@@ -502,10 +508,13 @@ async def test_plugins_updated(coresys: CoreSys):
     )
     assert await test.execute()
 
-    with patch.object(
-        PluginAudio, "need_update", new=PropertyMock(return_value=True)
-    ), patch.object(
-        PluginAudio, "update", side_effect=[AudioUpdateError, None, AudioUpdateError]
+    with (
+        patch.object(PluginAudio, "need_update", new=PropertyMock(return_value=True)),
+        patch.object(
+            PluginAudio,
+            "update",
+            side_effect=[AudioUpdateError, None, AudioUpdateError],
+        ),
     ):
         assert not await test.execute()
         assert await test.execute()

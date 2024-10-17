@@ -1,4 +1,5 @@
 """Init file for Supervisor host RESTful API."""
+
 import asyncio
 from contextlib import suppress
 import logging
@@ -27,7 +28,7 @@ from ..const import (
     ATTR_TIMEZONE,
 )
 from ..coresys import CoreSysAttributes
-from ..exceptions import APIError, HostLogError
+from ..exceptions import APIDBMigrationInProgress, APIError, HostLogError
 from ..host.const import (
     PARAM_BOOT_ID,
     PARAM_FOLLOW,
@@ -45,6 +46,7 @@ from .const import (
     ATTR_BROADCAST_MDNS,
     ATTR_DT_SYNCHRONIZED,
     ATTR_DT_UTC,
+    ATTR_FORCE,
     ATTR_IDENTIFIERS,
     ATTR_LLMNR_HOSTNAME,
     ATTR_STARTUP_TIME,
@@ -59,13 +61,32 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 
 IDENTIFIER = "identifier"
 BOOTID = "bootid"
-DEFAULT_RANGE = 100
+DEFAULT_LINES = 100
 
 SCHEMA_OPTIONS = vol.Schema({vol.Optional(ATTR_HOSTNAME): str})
+
+# pylint: disable=no-value-for-parameter
+SCHEMA_SHUTDOWN = vol.Schema(
+    {
+        vol.Optional(ATTR_FORCE, default=False): vol.Boolean(),
+    }
+)
+# pylint: enable=no-value-for-parameter
 
 
 class APIHost(CoreSysAttributes):
     """Handle RESTful API for host functions."""
+
+    async def _check_ha_offline_migration(self, force: bool) -> None:
+        """Check if HA has an offline migration in progress and raise if not forced."""
+        if (
+            not force
+            and (state := await self.sys_homeassistant.api.get_api_state())
+            and state.offline_db_migration
+        ):
+            raise APIDBMigrationInProgress(
+                "Home Assistant offline database migration in progress, please wait until complete before shutting down host"
+            )
 
     @api_process
     async def info(self, request):
@@ -108,14 +129,20 @@ class APIHost(CoreSysAttributes):
             )
 
     @api_process
-    def reboot(self, request):
+    async def reboot(self, request):
         """Reboot host."""
-        return asyncio.shield(self.sys_host.control.reboot())
+        body = await api_validate(SCHEMA_SHUTDOWN, request)
+        await self._check_ha_offline_migration(force=body[ATTR_FORCE])
+
+        return await asyncio.shield(self.sys_host.control.reboot())
 
     @api_process
-    def shutdown(self, request):
+    async def shutdown(self, request):
         """Poweroff host."""
-        return asyncio.shield(self.sys_host.control.shutdown())
+        body = await api_validate(SCHEMA_SHUTDOWN, request)
+        await self._check_ha_offline_migration(force=body[ATTR_FORCE])
+
+        return await asyncio.shield(self.sys_host.control.shutdown())
 
     @api_process
     def reload(self, request):
@@ -163,8 +190,7 @@ class APIHost(CoreSysAttributes):
                 raise APIError() from err
         return possible_offset
 
-    @api_process_raw(CONTENT_TYPE_TEXT, error_type=CONTENT_TYPE_TEXT)
-    async def advanced_logs(
+    async def advanced_logs_handler(
         self, request: web.Request, identifier: str | None = None, follow: bool = False
     ) -> web.StreamResponse:
         """Return systemd-journald logs."""
@@ -196,13 +222,30 @@ class APIHost(CoreSysAttributes):
                 "supported for now."
             )
 
-        if request.headers[ACCEPT] == CONTENT_TYPE_X_LOG:
+        if "verbose" in request.query or request.headers[ACCEPT] == CONTENT_TYPE_X_LOG:
             log_formatter = LogFormatter.VERBOSE
 
-        if RANGE in request.headers:
+        if "lines" in request.query:
+            lines = request.query.get("lines", DEFAULT_LINES)
+            try:
+                lines = int(lines)
+            except ValueError:
+                # If the user passed a non-integer value, just use the default instead of error.
+                lines = DEFAULT_LINES
+            finally:
+                # We can't use the entries= Range header syntax to refer to the last 1 line,
+                # and passing 1 to the calculation below would return the 1st line of the logs
+                # instead. Since this is really an edge case that doesn't matter much, we'll just
+                # return 2 lines at minimum.
+                lines = max(2, lines)
+            # entries=cursor[[:num_skip]:num_entries]
+            range_header = f"entries=:-{lines-1}:{'' if follow else lines}"
+        elif RANGE in request.headers:
             range_header = request.headers.get(RANGE)
         else:
-            range_header = f"entries=:-{DEFAULT_RANGE}:"
+            range_header = (
+                f"entries=:-{DEFAULT_LINES-1}:{'' if follow else DEFAULT_LINES}"
+            )
 
         async with self.sys_host.logs.journald_logs(
             params=params, range_header=range_header, accept=LogFormat.JOURNAL
@@ -210,11 +253,23 @@ class APIHost(CoreSysAttributes):
             try:
                 response = web.StreamResponse()
                 response.content_type = CONTENT_TYPE_TEXT
-                await response.prepare(request)
-                async for line in journal_logs_reader(resp, log_formatter):
+                headers_returned = False
+                async for cursor, line in journal_logs_reader(resp, log_formatter):
+                    if not headers_returned:
+                        if cursor:
+                            response.headers["X-First-Cursor"] = cursor
+                        await response.prepare(request)
+                        headers_returned = True
                     await response.write(line.encode("utf-8") + b"\n")
             except ConnectionResetError as ex:
                 raise APIError(
                     "Connection reset when trying to fetch data from systemd-journald."
                 ) from ex
             return response
+
+    @api_process_raw(CONTENT_TYPE_TEXT, error_type=CONTENT_TYPE_TEXT)
+    async def advanced_logs(
+        self, request: web.Request, identifier: str | None = None, follow: bool = False
+    ) -> web.StreamResponse:
+        """Return systemd-journald logs. Wrapped as standard API handler."""
+        return await self.advanced_logs_handler(request, identifier, follow)

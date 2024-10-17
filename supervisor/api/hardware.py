@@ -1,4 +1,5 @@
 """Init file for Supervisor hardware RESTful API."""
+
 import logging
 from typing import Any
 
@@ -16,7 +17,7 @@ from ..const import (
     ATTR_SYSTEM,
 )
 from ..coresys import CoreSysAttributes
-from ..dbus.udisks2 import UDisks2
+from ..dbus.udisks2 import UDisks2Manager
 from ..dbus.udisks2.block import UDisks2Block
 from ..dbus.udisks2.drive import UDisks2Drive
 from ..hardware.data import Device
@@ -72,7 +73,7 @@ def filesystem_struct(fs_block: UDisks2Block) -> dict[str, Any]:
     }
 
 
-def drive_struct(udisks2: UDisks2, drive: UDisks2Drive) -> dict[str, Any]:
+def drive_struct(udisks2: UDisks2Manager, drive: UDisks2Drive) -> dict[str, Any]:
     """Return a dict with information of a disk to be used in the API."""
     return {
         ATTR_VENDOR: drive.vendor,

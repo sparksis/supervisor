@@ -1,6 +1,7 @@
 """Test addon manager."""
 
 import asyncio
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
@@ -24,6 +25,7 @@ from supervisor.exceptions import (
     DockerNotFound,
 )
 from supervisor.plugins.dns import PluginDns
+from supervisor.store.addon import AddonStore
 from supervisor.store.repository import Repository
 from supervisor.utils import check_exception_chain
 from supervisor.utils.common import write_json_file
@@ -35,9 +37,10 @@ from tests.const import TEST_ADDON_SLUG
 @pytest.fixture(autouse=True)
 async def fixture_mock_arch_disk() -> None:
     """Mock supported arch and disk space."""
-    with patch(
-        "shutil.disk_usage", return_value=(42, 42, 2 * (1024.0**3))
-    ), patch.object(CpuArch, "supported", new=PropertyMock(return_value=["amd64"])):
+    with (
+        patch("shutil.disk_usage", return_value=(42, 42, 2 * (1024.0**3))),
+        patch.object(CpuArch, "supported", new=PropertyMock(return_value=["amd64"])),
+    ):
         yield
 
 
@@ -45,6 +48,19 @@ async def fixture_mock_arch_disk() -> None:
 async def fixture_remove_wait_boot(coresys: CoreSys) -> None:
     """Remove default wait boot time for tests."""
     coresys.config.wait_boot = 0
+
+
+@pytest.fixture(name="install_addon_example_image")
+def fixture_install_addon_example_image(coresys: CoreSys, repository) -> Addon:
+    """Install local_example add-on with image."""
+    store = coresys.addons.store["local_example_image"]
+    coresys.addons.data.install(store)
+    # pylint: disable-next=protected-access
+    coresys.addons.data._data = coresys.addons.data._schema(coresys.addons.data._data)
+
+    addon = Addon(coresys, store.slug)
+    coresys.addons.local[addon.slug] = addon
+    yield addon
 
 
 async def test_image_added_removed_on_update(
@@ -62,9 +78,10 @@ async def test_image_added_removed_on_update(
     assert install_addon_ssh.image == "local/amd64-addon-ssh"
     assert coresys.addons.store.get(TEST_ADDON_SLUG).image == "test/amd64-my-ssh-addon"
 
-    with patch.object(DockerInterface, "install") as install, patch.object(
-        DockerAddon, "_build"
-    ) as build:
+    with (
+        patch.object(DockerInterface, "install") as install,
+        patch.object(DockerAddon, "_build") as build,
+    ):
         await coresys.addons.update(TEST_ADDON_SLUG)
         build.assert_not_called()
         install.assert_called_once_with(
@@ -82,9 +99,10 @@ async def test_image_added_removed_on_update(
     assert install_addon_ssh.image == "test/amd64-my-ssh-addon"
     assert coresys.addons.store.get(TEST_ADDON_SLUG).image == "local/amd64-addon-ssh"
 
-    with patch.object(DockerInterface, "install") as install, patch.object(
-        DockerAddon, "_build"
-    ) as build:
+    with (
+        patch.object(DockerInterface, "install") as install,
+        patch.object(DockerAddon, "_build") as build,
+    ):
         await coresys.addons.update(TEST_ADDON_SLUG)
         build.assert_called_once_with(AwesomeVersion("11.0.0"), "local/amd64-addon-ssh")
         install.assert_not_called()
@@ -96,8 +114,9 @@ async def test_addon_boot_system_error(
 ):
     """Test system errors during addon boot."""
     install_addon_ssh.boot = AddonBoot.AUTO
-    with patch.object(Addon, "write_options"), patch.object(
-        DockerAddon, "run", side_effect=err
+    with (
+        patch.object(Addon, "write_options"),
+        patch.object(DockerAddon, "run", side_effect=err),
     ):
         await coresys.addons.boot(AddonStartup.APPLICATION)
 
@@ -123,8 +142,9 @@ async def test_addon_boot_other_error(
     """Test other errors captured during addon boot."""
     install_addon_ssh.boot = AddonBoot.AUTO
     err = OSError()
-    with patch.object(Addon, "write_options"), patch.object(
-        DockerAddon, "run", side_effect=err
+    with (
+        patch.object(Addon, "write_options"),
+        patch.object(DockerAddon, "run", side_effect=err),
     ):
         await coresys.addons.boot(AddonStartup.APPLICATION)
 
@@ -186,9 +206,10 @@ async def test_load(
     """Test addon manager load."""
     caplog.clear()
 
-    with patch.object(DockerInterface, "attach") as attach, patch.object(
-        PluginDns, "write_hosts"
-    ) as write_hosts:
+    with (
+        patch.object(DockerInterface, "attach") as attach,
+        patch.object(PluginDns, "write_hosts") as write_hosts,
+    ):
         await coresys.addons.load()
 
         attach.assert_called_once_with(version=AwesomeVersion("9.2.1"))
@@ -254,8 +275,9 @@ async def test_update(
 
     assert install_addon_ssh.need_update is True
 
-    with patch.object(DockerInterface, "install"), patch.object(
-        DockerAddon, "is_running", return_value=False
+    with (
+        patch.object(DockerInterface, "install"),
+        patch.object(DockerAddon, "is_running", return_value=False),
     ):
         start_task = await coresys.addons.update(TEST_ADDON_SLUG)
 
@@ -276,9 +298,11 @@ async def test_rebuild(
     install_addon_ssh.path_data.mkdir()
     await install_addon_ssh.load()
 
-    with patch.object(DockerAddon, "_build"), patch.object(
-        DockerAddon, "is_running", return_value=False
-    ), patch.object(Addon, "need_build", new=PropertyMock(return_value=True)):
+    with (
+        patch.object(DockerAddon, "_build"),
+        patch.object(DockerAddon, "is_running", return_value=False),
+        patch.object(Addon, "need_build", new=PropertyMock(return_value=True)),
+    ):
         start_task = await coresys.addons.rebuild(TEST_ADDON_SLUG)
 
     assert bool(start_task) is (status == "running")
@@ -382,12 +406,16 @@ async def test_store_data_changes_during_update(
             assert image == "test_image"
             await event.wait()
 
-        with patch.object(DockerAddon, "update", new=mock_update), patch.object(
-            DockerAPI, "cleanup_old_images"
-        ) as cleanup:
+        with (
+            patch.object(DockerAddon, "update", new=mock_update),
+            patch.object(DockerAPI, "cleanup_old_images") as cleanup,
+        ):
             await coresys.addons.update("local_ssh")
             cleanup.assert_called_once_with(
-                "test_image", AwesomeVersion("1.1.1"), {"local/amd64-addon-ssh"}
+                "test_image",
+                AwesomeVersion("1.1.1"),
+                {"local/amd64-addon-ssh"},
+                keep_images=set(),
             )
 
     update_task = coresys.create_task(simulate_update())
@@ -434,10 +462,89 @@ async def test_watchdog_runs_during_update(
         await asyncio.sleep(0)
 
     # Start should be called exactly once by update itself. Restart should never be called
-    with patch.object(DockerAddon, "stop", new=mock_stop), patch.object(
-        DockerAddon, "update", new=mock_update
-    ), patch.object(Addon, "start") as start, patch.object(Addon, "restart") as restart:
+    with (
+        patch.object(DockerAddon, "stop", new=mock_stop),
+        patch.object(DockerAddon, "update", new=mock_update),
+        patch.object(Addon, "start") as start,
+        patch.object(Addon, "restart") as restart,
+    ):
         await coresys.addons.update("local_ssh")
         await asyncio.sleep(0)
         start.assert_called_once()
         restart.assert_not_called()
+
+
+async def test_shared_image_kept_on_uninstall(
+    coresys: CoreSys, install_addon_example: Addon
+):
+    """Test if two addons share an image it is not removed on uninstall."""
+    # Clone example to a new mock copy so two share an image
+    store_data = deepcopy(coresys.addons.store["local_example"].data)
+    store = AddonStore(coresys, "local_example2", store_data)
+    coresys.addons.store["local_example2"] = store
+    coresys.addons.data.install(store)
+    # pylint: disable-next=protected-access
+    coresys.addons.data._data = coresys.addons.data._schema(coresys.addons.data._data)
+
+    example_2 = Addon(coresys, store.slug)
+    coresys.addons.local[example_2.slug] = example_2
+
+    image = f"{install_addon_example.image}:{install_addon_example.version}"
+    latest = f"{install_addon_example.image}:latest"
+
+    await coresys.addons.uninstall("local_example2")
+    coresys.docker.images.remove.assert_not_called()
+    assert not coresys.addons.get("local_example2", local_only=True)
+
+    await coresys.addons.uninstall("local_example")
+    assert coresys.docker.images.remove.call_count == 2
+    assert coresys.docker.images.remove.call_args_list[0].kwargs == {
+        "image": latest,
+        "force": True,
+    }
+    assert coresys.docker.images.remove.call_args_list[1].kwargs == {
+        "image": image,
+        "force": True,
+    }
+    assert not coresys.addons.get("local_example", local_only=True)
+
+
+async def test_shared_image_kept_on_update(
+    coresys: CoreSys, install_addon_example_image: Addon, docker: DockerAPI
+):
+    """Test if two addons share an image it is not removed on update."""
+    # Clone example to a new mock copy so two share an image
+    # But modify version in store so Supervisor sees an update
+    curr_store_data = deepcopy(coresys.store.data.addons["local_example_image"])
+    curr_store = AddonStore(coresys, "local_example2", curr_store_data)
+    install_addon_example_image.data_store["version"] = "1.3.0"
+    new_store_data = deepcopy(coresys.store.data.addons["local_example_image"])
+    new_store = AddonStore(coresys, "local_example2", new_store_data)
+
+    coresys.store.data.addons["local_example2"] = new_store_data
+    coresys.addons.store["local_example2"] = new_store
+    coresys.addons.data.install(curr_store)
+    # pylint: disable-next=protected-access
+    coresys.addons.data._data = coresys.addons.data._schema(coresys.addons.data._data)
+
+    example_2 = Addon(coresys, curr_store.slug)
+    coresys.addons.local[example_2.slug] = example_2
+
+    assert example_2.version == "1.2.0"
+    assert install_addon_example_image.version == "1.2.0"
+
+    image_new = MagicMock()
+    image_new.id = "image_new"
+    image_old = MagicMock()
+    image_old.id = "image_old"
+    docker.images.get.side_effect = [image_new, image_old]
+    docker.images.list.return_value = [image_new, image_old]
+
+    await coresys.addons.update("local_example2")
+    docker.images.remove.assert_not_called()
+    assert example_2.version == "1.3.0"
+
+    docker.images.get.side_effect = [image_new]
+    await coresys.addons.update("local_example_image")
+    docker.images.remove.assert_called_once_with("image_old", force=True)
+    assert install_addon_example_image.version == "1.3.0"

@@ -1,4 +1,5 @@
 """DBus implementation with glib."""
+
 from __future__ import annotations
 
 import asyncio
@@ -37,6 +38,7 @@ from .sentry import capture_exception
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
+DBUS_INTERFACE_OBJECT_MANAGER: str = "org.freedesktop.DBus.ObjectManager"
 DBUS_INTERFACE_PROPERTIES: str = "org.freedesktop.DBus.Properties"
 DBUS_METHOD_GETALL: str = "org.freedesktop.DBus.Properties.GetAll"
 
@@ -110,6 +112,13 @@ class DBus:
                 )
             return await getattr(proxy_interface, method)(*args)
         except DBusFastDBusError as err:
+            _LOGGER.debug(
+                "D-Bus fast error on call - %s.%s on %s: %s",
+                proxy_interface.introspection.name,
+                method,
+                proxy_interface.path,
+                err,
+            )
             raise DBus.from_dbus_error(err) from None
         except Exception as err:  # pylint: disable=broad-except
             capture_exception(err)
@@ -195,6 +204,13 @@ class DBus:
         if DBUS_INTERFACE_PROPERTIES not in self._proxies:
             return None
         return DBusCallWrapper(self, DBUS_INTERFACE_PROPERTIES)
+
+    @property
+    def object_manager(self) -> DBusCallWrapper | None:
+        """Get object manager proxy interface."""
+        if DBUS_INTERFACE_OBJECT_MANAGER not in self._proxies:
+            return None
+        return DBusCallWrapper(self, DBUS_INTERFACE_OBJECT_MANAGER)
 
     async def get_properties(self, interface: str) -> dict[str, Any]:
         """Read all properties from interface."""

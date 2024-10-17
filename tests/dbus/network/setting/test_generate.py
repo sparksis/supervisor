@@ -5,16 +5,16 @@ from unittest.mock import PropertyMock, patch
 from supervisor.dbus.network import NetworkManager
 from supervisor.dbus.network.interface import NetworkInterface
 from supervisor.dbus.network.setting.generate import get_connection_from_interface
-from supervisor.host.configuration import IpConfig, VlanConfig
+from supervisor.host.configuration import IpConfig, IpSetting, VlanConfig
 from supervisor.host.const import InterfaceMethod, InterfaceType
 from supervisor.host.network import Interface
 
-from tests.const import TEST_INTERFACE
+from tests.const import TEST_INTERFACE_ETH_NAME
 
 
 async def test_get_connection_from_interface(network_manager: NetworkManager):
     """Test network interface."""
-    dbus_interface = network_manager.get(TEST_INTERFACE)
+    dbus_interface = network_manager.get(TEST_INTERFACE_ETH_NAME)
     interface = Interface.from_dbus_interface(dbus_interface)
     connection_payload = get_connection_from_interface(interface, network_manager)
 
@@ -33,7 +33,7 @@ async def test_get_connection_from_interface(network_manager: NetworkManager):
 
 async def test_get_connection_no_path(network_manager: NetworkManager):
     """Test network interface without a path."""
-    dbus_interface = network_manager.get(TEST_INTERFACE)
+    dbus_interface = network_manager.get(TEST_INTERFACE_ETH_NAME)
     with patch.object(NetworkInterface, "path", new=PropertyMock(return_value=None)):
         interface = Interface.from_dbus_interface(dbus_interface)
 
@@ -55,8 +55,10 @@ async def test_generate_from_vlan(network_manager: NetworkManager):
         connected=True,
         primary=False,
         type=InterfaceType.VLAN,
-        ipv4=IpConfig(InterfaceMethod.AUTO, [], None, [], None),
+        ipv4=IpConfig([], None, [], None),
+        ipv4setting=IpSetting(InterfaceMethod.AUTO, [], None, []),
         ipv6=None,
+        ipv6setting=None,
         wifi=None,
         vlan=VlanConfig(1, "eth0"),
     )

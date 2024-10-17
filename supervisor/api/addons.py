@@ -1,4 +1,5 @@
 """Init file for Supervisor Home Assistant RESTful API."""
+
 import asyncio
 from collections.abc import Awaitable
 import logging
@@ -81,6 +82,8 @@ from ..const import (
     ATTR_STARTUP,
     ATTR_STATE,
     ATTR_STDIN,
+    ATTR_SYSTEM_MANAGED,
+    ATTR_SYSTEM_MANAGED_CONFIG_ENTRY,
     ATTR_TRANSLATIONS,
     ATTR_UART,
     ATTR_UDEV,
@@ -95,6 +98,7 @@ from ..const import (
     ATTR_WEBUI,
     REQUEST_FROM,
     AddonBoot,
+    AddonBootConfig,
 )
 from ..coresys import CoreSysAttributes
 from ..docker.stats import DockerStats
@@ -106,7 +110,7 @@ from ..exceptions import (
     PwnedSecret,
 )
 from ..validate import docker_ports
-from .const import ATTR_REMOVE_CONFIG, ATTR_SIGNED
+from .const import ATTR_BOOT_CONFIG, ATTR_REMOVE_CONFIG, ATTR_SIGNED
 from .utils import api_process, api_validate, json_loads
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
@@ -123,6 +127,13 @@ SCHEMA_OPTIONS = vol.Schema(
         vol.Optional(ATTR_AUDIO_INPUT): vol.Maybe(str),
         vol.Optional(ATTR_INGRESS_PANEL): vol.Boolean(),
         vol.Optional(ATTR_WATCHDOG): vol.Boolean(),
+    }
+)
+
+SCHEMA_SYS_OPTIONS = vol.Schema(
+    {
+        vol.Optional(ATTR_SYSTEM_MANAGED): vol.Boolean(),
+        vol.Optional(ATTR_SYSTEM_MANAGED_CONFIG_ENTRY): vol.Maybe(str),
     }
 )
 
@@ -178,6 +189,7 @@ class APIAddons(CoreSysAttributes):
                 ATTR_URL: addon.url,
                 ATTR_ICON: addon.with_icon,
                 ATTR_LOGO: addon.with_logo,
+                ATTR_SYSTEM_MANAGED: addon.system_managed,
             }
             for addon in self.sys_addons.installed
         ]
@@ -206,6 +218,7 @@ class APIAddons(CoreSysAttributes):
             ATTR_VERSION_LATEST: addon.latest_version,
             ATTR_PROTECTED: addon.protected,
             ATTR_RATING: rating_security(addon),
+            ATTR_BOOT_CONFIG: addon.boot_config,
             ATTR_BOOT: addon.boot,
             ATTR_OPTIONS: addon.options,
             ATTR_SCHEMA: addon.schema_ui,
@@ -265,6 +278,8 @@ class APIAddons(CoreSysAttributes):
             ATTR_WATCHDOG: addon.watchdog,
             ATTR_DEVICES: addon.static_devices
             + [device.path for device in addon.devices],
+            ATTR_SYSTEM_MANAGED: addon.system_managed,
+            ATTR_SYSTEM_MANAGED_CONFIG_ENTRY: addon.system_managed_config_entry,
         }
 
         return data
@@ -287,6 +302,10 @@ class APIAddons(CoreSysAttributes):
         if ATTR_OPTIONS in body:
             addon.options = body[ATTR_OPTIONS]
         if ATTR_BOOT in body:
+            if addon.boot_config == AddonBootConfig.MANUAL_ONLY:
+                raise APIError(
+                    f"Addon {addon.slug} boot option is set to {addon.boot_config} so it cannot be changed"
+                )
             addon.boot = body[ATTR_BOOT]
         if ATTR_AUTO_UPDATE in body:
             addon.auto_update = body[ATTR_AUTO_UPDATE]
@@ -301,6 +320,20 @@ class APIAddons(CoreSysAttributes):
             await self.sys_ingress.update_hass_panel(addon)
         if ATTR_WATCHDOG in body:
             addon.watchdog = body[ATTR_WATCHDOG]
+
+        addon.save_persist()
+
+    @api_process
+    async def sys_options(self, request: web.Request) -> None:
+        """Store system options for an add-on."""
+        addon = self.get_addon_for_request(request)
+
+        # Validate/Process Body
+        body = await api_validate(SCHEMA_SYS_OPTIONS, request)
+        if ATTR_SYSTEM_MANAGED in body:
+            addon.system_managed = body[ATTR_SYSTEM_MANAGED]
+        if ATTR_SYSTEM_MANAGED_CONFIG_ENTRY in body:
+            addon.system_managed_config_entry = body[ATTR_SYSTEM_MANAGED_CONFIG_ENTRY]
 
         addon.save_persist()
 

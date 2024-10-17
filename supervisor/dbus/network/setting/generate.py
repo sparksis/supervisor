@@ -1,4 +1,5 @@
 """Payload generators for DBUS communication."""
+
 from __future__ import annotations
 
 import socket
@@ -10,20 +11,126 @@ from dbus_fast import Variant
 from ....host.const import InterfaceMethod, InterfaceType
 from .. import NetworkManager
 from . import (
-    ATTR_ASSIGNED_MAC,
     CONF_ATTR_802_ETHERNET,
+    CONF_ATTR_802_ETHERNET_ASSIGNED_MAC,
     CONF_ATTR_802_WIRELESS,
+    CONF_ATTR_802_WIRELESS_ASSIGNED_MAC,
+    CONF_ATTR_802_WIRELESS_MODE,
+    CONF_ATTR_802_WIRELESS_POWERSAVE,
     CONF_ATTR_802_WIRELESS_SECURITY,
+    CONF_ATTR_802_WIRELESS_SECURITY_AUTH_ALG,
+    CONF_ATTR_802_WIRELESS_SECURITY_KEY_MGMT,
+    CONF_ATTR_802_WIRELESS_SECURITY_PSK,
+    CONF_ATTR_802_WIRELESS_SSID,
     CONF_ATTR_CONNECTION,
+    CONF_ATTR_CONNECTION_AUTOCONNECT,
+    CONF_ATTR_CONNECTION_ID,
+    CONF_ATTR_CONNECTION_LLMNR,
+    CONF_ATTR_CONNECTION_MDNS,
+    CONF_ATTR_CONNECTION_TYPE,
+    CONF_ATTR_CONNECTION_UUID,
     CONF_ATTR_IPV4,
+    CONF_ATTR_IPV4_ADDRESS_DATA,
+    CONF_ATTR_IPV4_DNS,
+    CONF_ATTR_IPV4_GATEWAY,
+    CONF_ATTR_IPV4_METHOD,
     CONF_ATTR_IPV6,
+    CONF_ATTR_IPV6_ADDRESS_DATA,
+    CONF_ATTR_IPV6_DNS,
+    CONF_ATTR_IPV6_GATEWAY,
+    CONF_ATTR_IPV6_METHOD,
     CONF_ATTR_MATCH,
-    CONF_ATTR_PATH,
+    CONF_ATTR_MATCH_PATH,
     CONF_ATTR_VLAN,
+    CONF_ATTR_VLAN_ID,
+    CONF_ATTR_VLAN_PARENT,
 )
 
 if TYPE_CHECKING:
     from ....host.configuration import Interface
+
+
+def _get_ipv4_connection_settings(ipv4setting) -> dict:
+    ipv4 = {}
+    if not ipv4setting or ipv4setting.method == InterfaceMethod.AUTO:
+        ipv4[CONF_ATTR_IPV4_METHOD] = Variant("s", "auto")
+    elif ipv4setting.method == InterfaceMethod.DISABLED:
+        ipv4[CONF_ATTR_IPV4_METHOD] = Variant("s", "disabled")
+    elif ipv4setting.method == InterfaceMethod.STATIC:
+        ipv4[CONF_ATTR_IPV4_METHOD] = Variant("s", "manual")
+
+        address_data = []
+        for address in ipv4setting.address:
+            address_data.append(
+                {
+                    "address": Variant("s", str(address.ip)),
+                    "prefix": Variant("u", int(address.with_prefixlen.split("/")[-1])),
+                }
+            )
+
+        ipv4[CONF_ATTR_IPV4_ADDRESS_DATA] = Variant("aa{sv}", address_data)
+        if ipv4setting.gateway:
+            ipv4[CONF_ATTR_IPV4_GATEWAY] = Variant("s", str(ipv4setting.gateway))
+    else:
+        raise RuntimeError("Invalid IPv4 InterfaceMethod")
+
+    if (
+        ipv4setting
+        and ipv4setting.nameservers
+        and ipv4setting.method
+        in (
+            InterfaceMethod.AUTO,
+            InterfaceMethod.STATIC,
+        )
+    ):
+        nameservers = ipv4setting.nameservers if ipv4setting else []
+        ipv4[CONF_ATTR_IPV4_DNS] = Variant(
+            "au",
+            [socket.htonl(int(ip_address)) for ip_address in nameservers],
+        )
+
+    return ipv4
+
+
+def _get_ipv6_connection_settings(ipv6setting) -> dict:
+    ipv6 = {}
+    if not ipv6setting or ipv6setting.method == InterfaceMethod.AUTO:
+        ipv6[CONF_ATTR_IPV6_METHOD] = Variant("s", "auto")
+    elif ipv6setting.method == InterfaceMethod.DISABLED:
+        ipv6[CONF_ATTR_IPV6_METHOD] = Variant("s", "link-local")
+    elif ipv6setting.method == InterfaceMethod.STATIC:
+        ipv6[CONF_ATTR_IPV6_METHOD] = Variant("s", "manual")
+
+        address_data = []
+        for address in ipv6setting.address:
+            address_data.append(
+                {
+                    "address": Variant("s", str(address.ip)),
+                    "prefix": Variant("u", int(address.with_prefixlen.split("/")[-1])),
+                }
+            )
+
+        ipv6[CONF_ATTR_IPV6_ADDRESS_DATA] = Variant("aa{sv}", address_data)
+        if ipv6setting.gateway:
+            ipv6[CONF_ATTR_IPV6_GATEWAY] = Variant("s", str(ipv6setting.gateway))
+    else:
+        raise RuntimeError("Invalid IPv6 InterfaceMethod")
+
+    if (
+        ipv6setting
+        and ipv6setting.nameservers
+        and ipv6setting.method
+        in (
+            InterfaceMethod.AUTO,
+            InterfaceMethod.STATIC,
+        )
+    ):
+        nameservers = ipv6setting.nameservers if ipv6setting else []
+        ipv6[CONF_ATTR_IPV6_DNS] = Variant(
+            "aay",
+            [ip_address.packed for ip_address in nameservers],
+        )
+    return ipv6
 
 
 def get_connection_from_interface(
@@ -53,77 +160,31 @@ def get_connection_from_interface(
 
     conn: dict[str, dict[str, Variant]] = {
         CONF_ATTR_CONNECTION: {
-            "id": Variant("s", name),
-            "type": Variant("s", iftype),
-            "uuid": Variant("s", uuid),
-            "llmnr": Variant("i", 2),
-            "mdns": Variant("i", 2),
-            "autoconnect": Variant("b", True),
+            CONF_ATTR_CONNECTION_ID: Variant("s", name),
+            CONF_ATTR_CONNECTION_UUID: Variant("s", uuid),
+            CONF_ATTR_CONNECTION_TYPE: Variant("s", iftype),
+            CONF_ATTR_CONNECTION_LLMNR: Variant("i", 2),
+            CONF_ATTR_CONNECTION_MDNS: Variant("i", 2),
+            CONF_ATTR_CONNECTION_AUTOCONNECT: Variant("b", True),
         },
     }
 
     if interface.type != InterfaceType.VLAN:
         if interface.path:
-            conn[CONF_ATTR_MATCH] = {CONF_ATTR_PATH: Variant("as", [interface.path])}
+            conn[CONF_ATTR_MATCH] = {
+                CONF_ATTR_MATCH_PATH: Variant("as", [interface.path])
+            }
         else:
             conn[CONF_ATTR_CONNECTION]["interface-name"] = Variant("s", interface.name)
 
-    ipv4 = {}
-    if not interface.ipv4 or interface.ipv4.method == InterfaceMethod.AUTO:
-        ipv4["method"] = Variant("s", "auto")
-    elif interface.ipv4.method == InterfaceMethod.DISABLED:
-        ipv4["method"] = Variant("s", "disabled")
-    else:
-        ipv4["method"] = Variant("s", "manual")
-        ipv4["dns"] = Variant(
-            "au",
-            [
-                socket.htonl(int(ip_address))
-                for ip_address in interface.ipv4.nameservers
-            ],
-        )
+    conn[CONF_ATTR_IPV4] = _get_ipv4_connection_settings(interface.ipv4setting)
 
-        adressdata = []
-        for address in interface.ipv4.address:
-            adressdata.append(
-                {
-                    "address": Variant("s", str(address.ip)),
-                    "prefix": Variant("u", int(address.with_prefixlen.split("/")[-1])),
-                }
-            )
-
-        ipv4["address-data"] = Variant("aa{sv}", adressdata)
-        ipv4["gateway"] = Variant("s", str(interface.ipv4.gateway))
-
-    conn[CONF_ATTR_IPV4] = ipv4
-
-    ipv6 = {}
-    if not interface.ipv6 or interface.ipv6.method == InterfaceMethod.AUTO:
-        ipv6["method"] = Variant("s", "auto")
-    elif interface.ipv6.method == InterfaceMethod.DISABLED:
-        ipv6["method"] = Variant("s", "link-local")
-    else:
-        ipv6["method"] = Variant("s", "manual")
-        ipv6["dns"] = Variant(
-            "aay", [ip_address.packed for ip_address in interface.ipv6.nameservers]
-        )
-
-        adressdata = []
-        for address in interface.ipv6.address:
-            adressdata.append(
-                {
-                    "address": Variant("s", str(address.ip)),
-                    "prefix": Variant("u", int(address.with_prefixlen.split("/")[-1])),
-                }
-            )
-
-        ipv6["address-data"] = Variant("aa{sv}", adressdata)
-        ipv6["gateway"] = Variant("s", str(interface.ipv6.gateway))
-
-    conn[CONF_ATTR_IPV6] = ipv6
+    conn[CONF_ATTR_IPV6] = _get_ipv6_connection_settings(interface.ipv6setting)
 
     if interface.type == InterfaceType.ETHERNET:
-        conn[CONF_ATTR_802_ETHERNET] = {ATTR_ASSIGNED_MAC: Variant("s", "preserve")}
+        conn[CONF_ATTR_802_ETHERNET] = {
+            CONF_ATTR_802_ETHERNET_ASSIGNED_MAC: Variant("s", "preserve")
+        }
     elif interface.type == "vlan":
         parent = interface.vlan.interface
         if parent in network_manager and (
@@ -132,30 +193,44 @@ def get_connection_from_interface(
             parent = parent_connection.uuid
 
         conn[CONF_ATTR_VLAN] = {
-            "id": Variant("u", interface.vlan.id),
-            "parent": Variant("s", parent),
+            CONF_ATTR_VLAN_ID: Variant("u", interface.vlan.id),
+            CONF_ATTR_VLAN_PARENT: Variant("s", parent),
         }
     elif interface.type == InterfaceType.WIRELESS:
         wireless = {
-            ATTR_ASSIGNED_MAC: Variant("s", "preserve"),
-            "ssid": Variant("ay", interface.wifi.ssid.encode("UTF-8")),
-            "mode": Variant("s", "infrastructure"),
-            "powersave": Variant("i", 1),
+            CONF_ATTR_802_WIRELESS_ASSIGNED_MAC: Variant("s", "preserve"),
+            CONF_ATTR_802_WIRELESS_MODE: Variant("s", "infrastructure"),
+            CONF_ATTR_802_WIRELESS_POWERSAVE: Variant("i", 1),
         }
+        if interface.wifi and interface.wifi.ssid:
+            wireless[CONF_ATTR_802_WIRELESS_SSID] = Variant(
+                "ay", interface.wifi.ssid.encode("UTF-8")
+            )
+
         conn[CONF_ATTR_802_WIRELESS] = wireless
 
-        if interface.wifi.auth != "open":
+        if interface.wifi and interface.wifi.auth != "open":
             wireless["security"] = Variant("s", CONF_ATTR_802_WIRELESS_SECURITY)
             wireless_security = {}
             if interface.wifi.auth == "wep":
-                wireless_security["auth-alg"] = Variant("s", "open")
-                wireless_security["key-mgmt"] = Variant("s", "none")
+                wireless_security[CONF_ATTR_802_WIRELESS_SECURITY_AUTH_ALG] = Variant(
+                    "s", "open"
+                )
+                wireless_security[CONF_ATTR_802_WIRELESS_SECURITY_KEY_MGMT] = Variant(
+                    "s", "none"
+                )
             elif interface.wifi.auth == "wpa-psk":
-                wireless_security["auth-alg"] = Variant("s", "open")
-                wireless_security["key-mgmt"] = Variant("s", "wpa-psk")
+                wireless_security[CONF_ATTR_802_WIRELESS_SECURITY_AUTH_ALG] = Variant(
+                    "s", "open"
+                )
+                wireless_security[CONF_ATTR_802_WIRELESS_SECURITY_KEY_MGMT] = Variant(
+                    "s", "wpa-psk"
+                )
 
             if interface.wifi.psk:
-                wireless_security["psk"] = Variant("s", interface.wifi.psk)
+                wireless_security[CONF_ATTR_802_WIRELESS_SECURITY_PSK] = Variant(
+                    "s", interface.wifi.psk
+                )
             conn[CONF_ATTR_802_WIRELESS_SECURITY] = wireless_security
 
     return conn
