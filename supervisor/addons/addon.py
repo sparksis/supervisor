@@ -99,6 +99,7 @@ from .model import AddonModel, Data
 from .options import AddonOptions
 from .utils import remove_data
 from .validate import SCHEMA_ADDON_BACKUP
+from ..kubernetes.addon import KubernetesAddon
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -137,6 +138,7 @@ class Addon(AddonModel):
         """Initialize data holder."""
         super().__init__(coresys, slug)
         self.instance: DockerAddon = DockerAddon(coresys, self)
+        self.kubernetes_instance: KubernetesAddon = KubernetesAddon(coresys, self)
         self._state: AddonState = AddonState.UNKNOWN
         self._manual_stop: bool = (
             self.sys_hardware.helper.last_boot != self.sys_config.last_boot
@@ -1486,3 +1488,11 @@ class Addon(AddonModel):
         if self.is_detached:
             return super().refresh_path_cache()
         return self.addon_store.refresh_path_cache()
+
+    async def deploy_kubernetes(self) -> None:
+        """Deploy the add-on using Kubernetes."""
+        try:
+            self.kubernetes_instance.create_deployment()
+        except KubernetesError as err:
+            _LOGGER.error("Failed to deploy add-on %s using Kubernetes: %s", self.slug, err)
+            raise AddonsError() from err

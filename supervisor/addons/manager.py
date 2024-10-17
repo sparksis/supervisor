@@ -29,6 +29,7 @@ from ..utils.sentry import capture_exception
 from .addon import Addon
 from .const import ADDON_UPDATE_CONDITIONS
 from .data import AddonsData
+from ..kubernetes.addon import KubernetesAddon
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -177,6 +178,11 @@ class AddonManager(CoreSysAttributes):
 
         await Addon(self.coresys, slug).install()
 
+        # Deploy Kubernetes if needed
+        addon = self.local[slug]
+        if addon.kubernetes:
+            await addon.deploy_kubernetes()
+
         _LOGGER.info("Add-on '%s' successfully installed", slug)
 
     async def uninstall(self, slug: str, *, remove_config: bool = False) -> None:
@@ -184,6 +190,12 @@ class AddonManager(CoreSysAttributes):
         if slug not in self.local:
             _LOGGER.warning("Add-on %s is not installed", slug)
             return
+
+        addon = self.local[slug]
+
+        # Delete Kubernetes deployment if needed
+        if addon.kubernetes:
+            await addon.kubernetes_instance.delete_deployment()
 
         shared_image = any(
             self.local[slug].image == addon.image

@@ -112,6 +112,7 @@ from ..exceptions import (
 from ..validate import docker_ports
 from .const import ATTR_BOOT_CONFIG, ATTR_REMOVE_CONFIG, ATTR_SIGNED
 from .utils import api_process, api_validate, json_loads
+from ..kubernetes.addon import KubernetesAddon
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -468,6 +469,24 @@ class APIAddons(CoreSysAttributes):
 
         data = await request.read()
         await asyncio.shield(addon.write_stdin(data))
+
+    @api_process
+    async def deploy_kubernetes(self, request: web.Request) -> None:
+        """Deploy the add-on using Kubernetes."""
+        addon = self.get_addon_for_request(request)
+        await asyncio.shield(addon.deploy_kubernetes())
+
+    @api_process
+    async def delete_kubernetes(self, request: web.Request) -> None:
+        """Delete the Kubernetes deployment for the add-on."""
+        addon = self.get_addon_for_request(request)
+        await asyncio.shield(addon.kubernetes_instance.delete_deployment())
+
+    @api_process
+    async def update_kubernetes(self, request: web.Request) -> None:
+        """Update the Kubernetes deployment for the add-on."""
+        addon = self.get_addon_for_request(request)
+        await asyncio.shield(addon.kubernetes_instance.update_deployment())
 
 
 def _pretty_services(addon: Addon) -> list[str]:

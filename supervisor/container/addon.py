@@ -1,4 +1,4 @@
-"""Init file for Supervisor add-on Docker object."""
+"""Container Addon base class for common container operations."""
 
 from __future__ import annotations
 
@@ -54,7 +54,6 @@ from .const import (
     MountType,
     PropagationMode,
 )
-from ..container.addon import ContainerAddon
 
 if TYPE_CHECKING:
     from ..addons.addon import Addon
@@ -65,52 +64,28 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 NO_ADDDRESS = ip_address("0.0.0.0")
 
 
-class DockerAddon(DockerInterface):
-    """Docker Supervisor wrapper for Home Assistant add-ons.
-
-    This class provides methods to manage Docker containers for add-ons, including running, updating, and stopping containers.
-    """
+class ContainerAddon:
+    """Base class for container operations."""
 
     def __init__(self, coresys: CoreSys, addon: Addon):
-        """Initialize Docker Home Assistant wrapper.
-
-        Args:
-            coresys (CoreSys): CoreSys instance.
-            addon (Addon): Addon instance.
-        """
+        """Initialize Container Addon base class."""
+        self.coresys: CoreSys = coresys
         self.addon: Addon = addon
-        super().__init__(coresys)
-
         self._hw_listener: EventListener | None = None
 
     @staticmethod
     def slug_to_name(slug: str) -> str:
-        """Convert slug to container name.
-
-        Args:
-            slug (str): Addon slug.
-
-        Returns:
-            str: Container name.
-        """
+        """Convert slug to container name."""
         return f"addon_{slug}"
 
     @property
     def image(self) -> str | None:
-        """Return name of Docker image.
-
-        Returns:
-            str | None: Docker image name.
-        """
+        """Return name of container image."""
         return self.addon.image
 
     @property
     def ip_address(self) -> IPv4Address:
-        """Return IP address of this container.
-
-        Returns:
-            IPv4Address: IP address of the container.
-        """
+        """Return IP address of this container."""
         if self.addon.host_network:
             return self.sys_docker.network.gateway
 
@@ -124,49 +99,29 @@ class DockerAddon(DockerInterface):
 
     @property
     def timeout(self) -> int:
-        """Return timeout for Docker actions.
-
-        Returns:
-            int: Timeout value.
-        """
+        """Return timeout for container actions."""
         return self.addon.timeout
 
     @property
     def version(self) -> AwesomeVersion:
-        """Return version of Docker image.
-
-        Returns:
-            AwesomeVersion: Docker image version.
-        """
+        """Return version of container image."""
         return self.addon.version
 
     @property
     def arch(self) -> str:
-        """Return arch of Docker image.
-
-        Returns:
-            str: Docker image architecture.
-        """
+        """Return arch of container image."""
         if self.addon.legacy:
             return self.sys_arch.default
         return super().arch
 
     @property
     def name(self) -> str:
-        """Return name of Docker container.
-
-        Returns:
-            str: Docker container name.
-        """
-        return DockerAddon.slug_to_name(self.addon.slug)
+        """Return name of container."""
+        return ContainerAddon.slug_to_name(self.addon.slug)
 
     @property
     def environment(self) -> dict[str, str | None]:
-        """Return environment for Docker add-on.
-
-        Returns:
-            dict[str, str | None]: Environment variables for the add-on.
-        """
+        """Return environment for container addon."""
         addon_env = self.addon.environment or {}
 
         # Provide options for legacy add-ons
@@ -175,7 +130,7 @@ class DockerAddon(DockerInterface):
                 if isinstance(value, (int, str)):
                     addon_env[key] = value
                 else:
-                    _LOGGER.warning("Can not set nested option %s as Docker env", key)
+                    _LOGGER.warning("Can not set nested option %s as container env", key)
 
         return {
             **addon_env,
@@ -186,11 +141,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def cgroups_rules(self) -> list[str] | None:
-        """Return a list of needed cgroups permission.
-
-        Returns:
-            list[str] | None: List of cgroups rules.
-        """
+        """Return a list of needed cgroups permission."""
         rules = set()
 
         # Attach correct cgroups for static devices
@@ -249,11 +200,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def ports(self) -> dict[str, str | int | None] | None:
-        """Filter None from add-on ports.
-
-        Returns:
-            dict[str, str | int | None] | None: Filtered ports.
-        """
+        """Filter None from add-on ports."""
         if self.addon.host_network or not self.addon.ports:
             return None
 
@@ -265,11 +212,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def security_opt(self) -> list[str]:
-        """Control security options.
-
-        Returns:
-            list[str]: Security options.
-        """
+        """Control security options."""
         security = super().security_opt
 
         # AppArmor
@@ -285,11 +228,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def tmpfs(self) -> dict[str, str] | None:
-        """Return tmpfs for Docker add-on.
-
-        Returns:
-            dict[str, str] | None: Tmpfs settings.
-        """
+        """Return tmpfs for container addon."""
         tmpfs = {}
 
         if self.addon.with_tmpfs:
@@ -305,11 +244,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def network_mapping(self) -> dict[str, IPv4Address]:
-        """Return hosts mapping.
-
-        Returns:
-            dict[str, IPv4Address]: Network mapping.
-        """
+        """Return hosts mapping."""
         return {
             "supervisor": self.sys_docker.network.supervisor,
             "hassio": self.sys_docker.network.supervisor,
@@ -317,44 +252,28 @@ class DockerAddon(DockerInterface):
 
     @property
     def network_mode(self) -> str | None:
-        """Return network mode for add-on.
-
-        Returns:
-            str | None: Network mode.
-        """
+        """Return network mode for add-on."""
         if self.addon.host_network:
             return "host"
         return None
 
     @property
     def pid_mode(self) -> str | None:
-        """Return PID mode for add-on.
-
-        Returns:
-            str | None: PID mode.
-        """
+        """Return PID mode for add-on."""
         if not self.addon.protected and self.addon.host_pid:
             return "host"
         return None
 
     @property
     def uts_mode(self) -> str | None:
-        """Return UTS mode for add-on.
-
-        Returns:
-            str | None: UTS mode.
-        """
+        """Return UTS mode for add-on."""
         if self.addon.host_uts:
             return "host"
         return None
 
     @property
     def capabilities(self) -> list[Capabilities] | None:
-        """Generate needed capabilities.
-
-        Returns:
-            list[Capabilities] | None: List of capabilities.
-        """
+        """Generate needed capabilities."""
         capabilities: set[Capabilities] = set(self.addon.privileged)
 
         # Need work with kernel modules
@@ -372,11 +291,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def ulimits(self) -> list[docker.types.Ulimit] | None:
-        """Generate ulimits for add-on.
-
-        Returns:
-            list[docker.types.Ulimit] | None: List of ulimits.
-        """
+        """Generate ulimits for add-on."""
         limits: list[docker.types.Ulimit] = []
 
         # Need schedule functions
@@ -394,11 +309,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def cpu_rt_runtime(self) -> int | None:
-        """Limit CPU real-time runtime in microseconds.
-
-        Returns:
-            int | None: CPU real-time runtime limit.
-        """
+        """Limit CPU real-time runtime in microseconds."""
         if not self.sys_docker.info.support_cpu_realtime:
             return None
 
@@ -409,11 +320,7 @@ class DockerAddon(DockerInterface):
 
     @property
     def mounts(self) -> list[Mount]:
-        """Return mounts for container.
-
-        Returns:
-            list[Mount]: List of mounts.
-        """
+        """Return mounts for container."""
         addon_mapping = self.addon.map_volumes
 
         target_data_path = ""
@@ -624,16 +531,12 @@ class DockerAddon(DockerInterface):
         return mounts
 
     @Job(
-        name="docker_addon_run",
+        name="container_addon_run",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image.
-
-        Raises:
-            DockerNotFound: If the Docker image is not found.
-        """
+        """Run container image."""
         # Security check
         if not self.addon.protected:
             _LOGGER.warning("%s running with disabled protected mode!", self.addon.name)
@@ -675,7 +578,7 @@ class DockerAddon(DockerInterface):
             raise
 
         _LOGGER.info(
-            "Starting Docker add-on %s with version %s", self.image, self.version
+            "Starting container add-on %s with version %s", self.image, self.version
         )
 
         # Write data to DNS server
@@ -694,7 +597,7 @@ class DockerAddon(DockerInterface):
             )
 
     @Job(
-        name="docker_addon_update",
+        name="container_addon_update",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -705,21 +608,14 @@ class DockerAddon(DockerInterface):
         latest: bool = False,
         arch: CpuArch | None = None,
     ) -> None:
-        """Update a docker image.
-
-        Args:
-            version (AwesomeVersion): New version of the Docker image.
-            image (str | None, optional): Docker image name. Defaults to None.
-            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
-            arch (CpuArch | None, optional): CPU architecture. Defaults to None.
-        """
+        """Update a container image."""
         image = image or self.image
 
         _LOGGER.info(
             "Updating image %s:%s to %s:%s", self.image, self.version, image, version
         )
 
-        # Update docker image
+        # Update container image
         await self.install(
             version,
             image=image,
@@ -729,7 +625,7 @@ class DockerAddon(DockerInterface):
         )
 
     @Job(
-        name="docker_addon_install",
+        name="container_addon_install",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -742,30 +638,14 @@ class DockerAddon(DockerInterface):
         *,
         need_build: bool | None = None,
     ) -> None:
-        """Pull Docker image or build it.
-
-        Args:
-            version (AwesomeVersion): Version of the Docker image.
-            image (str | None, optional): Docker image name. Defaults to None.
-            latest (bool, optional): Whether to tag the image as latest. Defaults to False.
-            arch (CpuArch | None, optional): CPU architecture. Defaults to None.
-            need_build (bool | None, optional): Whether the image needs to be built. Defaults to None.
-        """
+        """Pull container image or build it."""
         if need_build is None and self.addon.need_build or need_build:
             await self._build(version, image)
         else:
             await super().install(version, image, latest, arch)
 
     async def _build(self, version: AwesomeVersion, image: str | None = None) -> None:
-        """Build a Docker container.
-
-        Args:
-            version (AwesomeVersion): Version of the Docker image.
-            image (str | None, optional): Docker image name. Defaults to None.
-
-        Raises:
-            DockerError: If the build environment is invalid or the build fails.
-        """
+        """Build a container."""
         build_env = AddonBuild(self.coresys, self.addon)
         if not build_env.is_valid:
             _LOGGER.error("Invalid build environment, can't build this add-on!")
@@ -800,37 +680,23 @@ class DockerAddon(DockerInterface):
         _LOGGER.info("Build %s:%s done", self.image, version)
 
     @Job(
-        name="docker_addon_export_image",
+        name="container_addon_export_image",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     def export_image(self, tar_file: Path) -> Awaitable[None]:
-        """Export current images into a tar file.
-
-        Args:
-            tar_file (Path): Path to the tar file.
-
-        Returns:
-            Awaitable[None]: Awaitable object.
-        """
+        """Export current images into a tar file."""
         return self.sys_run_in_executor(
             self.sys_docker.export_image, self.image, self.version, tar_file
         )
 
     @Job(
-        name="docker_addon_import_image",
+        name="container_addon_import_image",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def import_image(self, tar_file: Path) -> None:
-        """Import a tar file as image.
-
-        Args:
-            tar_file (Path): Path to the tar file.
-
-        Raises:
-            DockerError: If the import fails.
-        """
+        """Import a tar file as image."""
         docker_image = await self.sys_run_in_executor(
             self.sys_docker.import_image, tar_file
         )
@@ -841,20 +707,14 @@ class DockerAddon(DockerInterface):
             with suppress(DockerError):
                 await self.cleanup()
 
-    @Job(name="docker_addon_cleanup", limit=JobExecutionLimit.GROUP_WAIT)
+    @Job(name="container_addon_cleanup", limit=JobExecutionLimit.GROUP_WAIT)
     async def cleanup(
         self,
         old_image: str | None = None,
         image: str | None = None,
         version: AwesomeVersion | None = None,
     ) -> None:
-        """Check if old version exists and cleanup other versions of image not in use.
-
-        Args:
-            old_image (str | None, optional): Old image name. Defaults to None.
-            image (str | None, optional): Docker image name. Defaults to None.
-            version (AwesomeVersion | None, optional): Docker image version. Defaults to None.
-        """
+        """Check if old version exists and cleanup other versions of image not in use."""
         await self.sys_run_in_executor(
             self.sys_docker.cleanup_old_images,
             (image := image or self.image),
@@ -870,19 +730,12 @@ class DockerAddon(DockerInterface):
         )
 
     @Job(
-        name="docker_addon_write_stdin",
+        name="container_addon_write_stdin",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def write_stdin(self, data: bytes) -> None:
-        """Write to add-on stdin.
-
-        Args:
-            data (bytes): Data to write to stdin.
-
-        Raises:
-            DockerError: If the container is not running or the write fails.
-        """
+        """Write to add-on stdin."""
         if not await self.is_running():
             raise DockerError()
 
@@ -891,11 +744,7 @@ class DockerAddon(DockerInterface):
     def _write_stdin(self, data: bytes) -> None:
         """Write to add-on stdin.
 
-        Args:
-            data (bytes): Data to write to stdin.
-
-        Raises:
-            DockerError: If the write fails.
+        Need run inside executor.
         """
         try:
             # Load needed docker objects
@@ -915,16 +764,12 @@ class DockerAddon(DockerInterface):
             raise DockerError() from err
 
     @Job(
-        name="docker_addon_stop",
+        name="container_addon_stop",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def stop(self, remove_container: bool = True) -> None:
-        """Stop/remove Docker container.
-
-        Args:
-            remove_container (bool, optional): Whether to remove the container. Defaults to True.
-        """
+        """Stop/remove container."""
         # DNS
         if self.ip_address != NO_ADDDRESS:
             try:
@@ -943,13 +788,7 @@ class DockerAddon(DockerInterface):
     async def _validate_trust(
         self, image_id: str, image: str, version: AwesomeVersion
     ) -> None:
-        """Validate trust of content.
-
-        Args:
-            image_id (str): Image ID.
-            image (str): Docker image name.
-            version (AwesomeVersion): Docker image version.
-        """
+        """Validate trust of content."""
         if not self.addon.signed:
             return
 
@@ -957,20 +796,13 @@ class DockerAddon(DockerInterface):
         return await self.sys_security.verify_content(self.addon.codenotary, checksum)
 
     @Job(
-        name="docker_addon_hardware_events",
+        name="container_addon_hardware_events",
         conditions=[JobCondition.OS_AGENT],
         limit=JobExecutionLimit.SINGLE_WAIT,
         internal=True,
     )
     async def _hardware_events(self, device: Device) -> None:
-        """Process Hardware events for adjust device access.
-
-        Args:
-            device (Device): Device instance.
-
-        Raises:
-            DockerError: If the hardware event processing fails.
-        """
+        """Process Hardware events for adjust device access."""
         if not any(
             device_path in (device.path, device.sysfs)
             for device_path in self.addon.static_devices
