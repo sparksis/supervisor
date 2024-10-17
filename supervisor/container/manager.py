@@ -1,9 +1,15 @@
 """Container API base class for common container operations."""
 
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
+
+class CommandReturn(NamedTuple):
+    """Class to represent the return value of a command executed in a container."""
+    stdout: str
+    stderr: str
+    returncode: int
 
 class ContainerAPI:
     """Base class for container operations."""
