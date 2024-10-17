@@ -93,3 +93,15 @@ class KubernetesAPI:
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when deleting deployment: %s\n", e)
             raise Exception(f"Exception when deleting deployment: {e}") from e
+
+    def start_deployment(self, name: str, image: str, env: dict[str, str]) -> None:
+        """Start Kubernetes deployment."""
+        self.create_deployment(name, image, env)
+
+    def stop_deployment(self, name: str) -> None:
+        """Stop Kubernetes deployment."""
+        self.delete_deployment(name)
+
+    def restart_deployment(self, name: str, image: str, env: dict[str, str]) -> None:
+        """Restart Kubernetes deployment."""
+        self.update_deployment(name, image, env)

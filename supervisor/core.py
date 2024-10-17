@@ -28,6 +28,7 @@ from .resolution.const import ContextType, IssueType, SuggestionType, UnhealthyR
 from .utils.dt import utcnow
 from .utils.sentry import capture_exception
 from .utils.whoami import WhoamiData, retrieve_whoami
+from .kubernetes.addon import KubernetesAddon
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -225,6 +226,9 @@ class Core(CoreSysAttributes):
         # Start addon mark as initialize
         await self.sys_addons.boot(AddonStartup.INITIALIZE)
 
+        # Start Kubernetes addons
+        await self._start_kubernetes_addons()
+
         try:
             # HomeAssistant is already running / supervisor have only reboot
             if self.sys_hardware.helper.last_boot == self.sys_config.last_boot:
@@ -421,3 +425,9 @@ class Core(CoreSysAttributes):
         # Tag version for latest
         await self.sys_supervisor.repair()
         _LOGGER.info("Finished repair of Supervisor Environment")
+
+    async def _start_kubernetes_addons(self):
+        """Start Kubernetes addons."""
+        for addon in self.sys_addons.installed:
+            if isinstance(addon, KubernetesAddon):
+                await addon.start()

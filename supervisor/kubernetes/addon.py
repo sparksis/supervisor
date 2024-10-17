@@ -118,3 +118,18 @@ class KubernetesAddon:
         except client.exceptions.ApiException as e:
             _LOGGER.error("Exception when updating deployment: %s\n", e)
             raise KubernetesError() from e
+
+    def start(self) -> None:
+        """Start the Kubernetes deployment for the addon."""
+        self.create_deployment()
+        _LOGGER.info("Kubernetes deployment %s started", self.name)
+
+    def stop(self) -> None:
+        """Stop the Kubernetes deployment for the addon."""
+        self.delete_deployment()
+        _LOGGER.info("Kubernetes deployment %s stopped", self.name)
+
+    def restart(self) -> None:
+        """Restart the Kubernetes deployment for the addon."""
+        self.update_deployment()
+        _LOGGER.info("Kubernetes deployment %s restarted", self.name)

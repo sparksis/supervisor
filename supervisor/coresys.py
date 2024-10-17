@@ -17,6 +17,7 @@ import aiohttp
 from .config import CoreConfig
 from .const import ENV_SUPERVISOR_DEV, SERVER_SOFTWARE
 from .utils.dt import UTC, get_time_zone
+from .kubernetes.manager import KubernetesAPI
 
 if TYPE_CHECKING:
     from .addons.manager import AddonManager
@@ -95,6 +96,7 @@ class CoreSys:
         self._security: Security | None = None
         self._bus: Bus | None = None
         self._mounts: MountManager | None = None
+        self._kubernetes: KubernetesAPI | None = None
 
         # Setup aiohttp session
         self.create_websession()
@@ -499,6 +501,20 @@ class CoreSys:
         self._mounts = value
 
     @property
+    def kubernetes(self) -> KubernetesAPI:
+        """Return KubernetesAPI object."""
+        if self._kubernetes is None:
+            raise RuntimeError("KubernetesAPI not set!")
+        return self._kubernetes
+
+    @kubernetes.setter
+    def kubernetes(self, value: KubernetesAPI) -> None:
+        """Set a KubernetesAPI object."""
+        if self._kubernetes:
+            raise RuntimeError("KubernetesAPI already set!")
+        self._kubernetes = value
+
+    @property
     def machine(self) -> str | None:
         """Return machine type string."""
         return self._machine
@@ -760,6 +776,11 @@ class CoreSysAttributes:
     def sys_mounts(self) -> MountManager:
         """Return mount manager object."""
         return self.coresys.mounts
+
+    @property
+    def sys_kubernetes(self) -> KubernetesAPI:
+        """Return KubernetesAPI object."""
+        return self.coresys.kubernetes
 
     def now(self) -> datetime:
         """Return now in local timezone."""
