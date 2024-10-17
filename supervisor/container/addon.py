@@ -1,4 +1,4 @@
-"""Init file for Supervisor add-on Docker object."""
+"""Container Addon base class for common container operations."""
 
 from __future__ import annotations
 
@@ -54,7 +54,6 @@ from .const import (
     MountType,
     PropagationMode,
 )
-from ..container.addon import ContainerAddon
 
 if TYPE_CHECKING:
     from ..addons.addon import Addon
@@ -65,14 +64,13 @@ _LOGGER: logging.Logger = logging.getLogger(__name__)
 NO_ADDDRESS = ip_address("0.0.0.0")
 
 
-class DockerAddon(ContainerAddon):
-    """Docker Supervisor wrapper for Home Assistant."""
+class ContainerAddon:
+    """Base class for container operations."""
 
     def __init__(self, coresys: CoreSys, addon: Addon):
-        """Initialize Docker Home Assistant wrapper."""
+        """Initialize Container Addon base class."""
+        self.coresys: CoreSys = coresys
         self.addon: Addon = addon
-        super().__init__(coresys)
-
         self._hw_listener: EventListener | None = None
 
     @staticmethod
@@ -82,7 +80,7 @@ class DockerAddon(ContainerAddon):
 
     @property
     def image(self) -> str | None:
-        """Return name of Docker image."""
+        """Return name of container image."""
         return self.addon.image
 
     @property
@@ -101,29 +99,29 @@ class DockerAddon(ContainerAddon):
 
     @property
     def timeout(self) -> int:
-        """Return timeout for Docker actions."""
+        """Return timeout for container actions."""
         return self.addon.timeout
 
     @property
     def version(self) -> AwesomeVersion:
-        """Return version of Docker image."""
+        """Return version of container image."""
         return self.addon.version
 
     @property
     def arch(self) -> str:
-        """Return arch of Docker image."""
+        """Return arch of container image."""
         if self.addon.legacy:
             return self.sys_arch.default
         return super().arch
 
     @property
     def name(self) -> str:
-        """Return name of Docker container."""
-        return DockerAddon.slug_to_name(self.addon.slug)
+        """Return name of container."""
+        return ContainerAddon.slug_to_name(self.addon.slug)
 
     @property
     def environment(self) -> dict[str, str | None]:
-        """Return environment for Docker add-on."""
+        """Return environment for container addon."""
         addon_env = self.addon.environment or {}
 
         # Provide options for legacy add-ons
@@ -132,7 +130,7 @@ class DockerAddon(ContainerAddon):
                 if isinstance(value, (int, str)):
                     addon_env[key] = value
                 else:
-                    _LOGGER.warning("Can not set nested option %s as Docker env", key)
+                    _LOGGER.warning("Can not set nested option %s as container env", key)
 
         return {
             **addon_env,
@@ -230,7 +228,7 @@ class DockerAddon(ContainerAddon):
 
     @property
     def tmpfs(self) -> dict[str, str] | None:
-        """Return tmpfs for Docker add-on."""
+        """Return tmpfs for container addon."""
         tmpfs = {}
 
         if self.addon.with_tmpfs:
@@ -533,12 +531,12 @@ class DockerAddon(ContainerAddon):
         return mounts
 
     @Job(
-        name="docker_addon_run",
+        name="container_addon_run",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def run(self) -> None:
-        """Run Docker image."""
+        """Run container image."""
         # Security check
         if not self.addon.protected:
             _LOGGER.warning("%s running with disabled protected mode!", self.addon.name)
@@ -580,7 +578,7 @@ class DockerAddon(ContainerAddon):
             raise
 
         _LOGGER.info(
-            "Starting Docker add-on %s with version %s", self.image, self.version
+            "Starting container add-on %s with version %s", self.image, self.version
         )
 
         # Write data to DNS server
@@ -599,7 +597,7 @@ class DockerAddon(ContainerAddon):
             )
 
     @Job(
-        name="docker_addon_update",
+        name="container_addon_update",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -610,14 +608,14 @@ class DockerAddon(ContainerAddon):
         latest: bool = False,
         arch: CpuArch | None = None,
     ) -> None:
-        """Update a docker image."""
+        """Update a container image."""
         image = image or self.image
 
         _LOGGER.info(
             "Updating image %s:%s to %s:%s", self.image, self.version, image, version
         )
 
-        # Update docker image
+        # Update container image
         await self.install(
             version,
             image=image,
@@ -627,7 +625,7 @@ class DockerAddon(ContainerAddon):
         )
 
     @Job(
-        name="docker_addon_install",
+        name="container_addon_install",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -640,14 +638,14 @@ class DockerAddon(ContainerAddon):
         *,
         need_build: bool | None = None,
     ) -> None:
-        """Pull Docker image or build it."""
+        """Pull container image or build it."""
         if need_build is None and self.addon.need_build or need_build:
             await self._build(version, image)
         else:
             await super().install(version, image, latest, arch)
 
     async def _build(self, version: AwesomeVersion, image: str | None = None) -> None:
-        """Build a Docker container."""
+        """Build a container."""
         build_env = AddonBuild(self.coresys, self.addon)
         if not build_env.is_valid:
             _LOGGER.error("Invalid build environment, can't build this add-on!")
@@ -682,7 +680,7 @@ class DockerAddon(ContainerAddon):
         _LOGGER.info("Build %s:%s done", self.image, version)
 
     @Job(
-        name="docker_addon_export_image",
+        name="container_addon_export_image",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -693,7 +691,7 @@ class DockerAddon(ContainerAddon):
         )
 
     @Job(
-        name="docker_addon_import_image",
+        name="container_addon_import_image",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -709,7 +707,7 @@ class DockerAddon(ContainerAddon):
             with suppress(DockerError):
                 await self.cleanup()
 
-    @Job(name="docker_addon_cleanup", limit=JobExecutionLimit.GROUP_WAIT)
+    @Job(name="container_addon_cleanup", limit=JobExecutionLimit.GROUP_WAIT)
     async def cleanup(
         self,
         old_image: str | None = None,
@@ -732,7 +730,7 @@ class DockerAddon(ContainerAddon):
         )
 
     @Job(
-        name="docker_addon_write_stdin",
+        name="container_addon_write_stdin",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
@@ -766,12 +764,12 @@ class DockerAddon(ContainerAddon):
             raise DockerError() from err
 
     @Job(
-        name="docker_addon_stop",
+        name="container_addon_stop",
         limit=JobExecutionLimit.GROUP_ONCE,
         on_condition=DockerJobError,
     )
     async def stop(self, remove_container: bool = True) -> None:
-        """Stop/remove Docker container."""
+        """Stop/remove container."""
         # DNS
         if self.ip_address != NO_ADDDRESS:
             try:
@@ -798,7 +796,7 @@ class DockerAddon(ContainerAddon):
         return await self.sys_security.verify_content(self.addon.codenotary, checksum)
 
     @Job(
-        name="docker_addon_hardware_events",
+        name="container_addon_hardware_events",
         conditions=[JobCondition.OS_AGENT],
         limit=JobExecutionLimit.SINGLE_WAIT,
         internal=True,

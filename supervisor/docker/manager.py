@@ -31,6 +31,7 @@ from ..coresys import CoreSys
 from ..exceptions import DockerAPIError, DockerError, DockerNotFound, DockerRequestError
 from ..utils.common import FileConfiguration
 from ..validate import SCHEMA_DOCKER_CONFIG
+from ..container.manager import ContainerAPI
 from .const import LABEL_MANAGED
 from .monitor import DockerMonitor
 from .network import DockerNetwork
@@ -97,7 +98,7 @@ class DockerConfig(FileConfiguration):
         return self._data.get(ATTR_REGISTRIES, {})
 
 
-class DockerAPI:
+class DockerAPI(ContainerAPI):
     """Docker Supervisor wrapper.
 
     This class is not AsyncIO safe!
