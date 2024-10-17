@@ -45,7 +45,6 @@ from ..resolution.const import ContextType, IssueType, SuggestionType
 from ..utils.sentry import capture_exception
 from .const import ContainerState, RestartPolicy
 from .manager import CommandReturn
-from ..kubernetes.monitor import KubernetesContainerStateEvent
 from .stats import DockerStats
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
